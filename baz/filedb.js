@@ -3,39 +3,30 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
 
     var File = (function () {
         function File(fileData) {
-            this.type = fileData.type;
-            this.content = fileData.content;
             this.name = fileData.name;
             this.location = fileData.location;
+            this.type = fileData.type;
+            this.content = fileData.content;
+            this.children = fileData.children || {
+            };
         }
         File._rxRepeatingSlash = /\/{2,}/g;
         File._rxTrailingSlash = /(.+?)(?:\/*)$/;
         File.prototype.addChild = function (file) {
-            if(!this.isDirectory) {
-                return;
-            }
-            if(!this.content) {
-                this.content = {
-                };
-            }
-            var siblings = this.content;
-            siblings[file.name] = {
+            this.children[file.name] = {
                 name: file.name,
                 type: file.type
             };
         };
         File.prototype.removeChild = function (filename) {
-            if(!this.isDirectory || !this.content) {
-                return;
-            }
-            var siblings = this.content;
-            delete siblings[filename];
+            delete this.children[filename];
         };
         File.prototype.getInfoObject = function () {
             return {
                 name: this.name,
                 type: this.type,
-                location: this.location
+                location: this.location,
+                children: this.children
             };
         };
         File.prototype.getStoreObject = function () {
@@ -44,6 +35,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                 location: this.location,
                 type: this.type,
                 content: this.content,
+                children: this.children,
                 absolutePath: this.absolutePath
             };
         };
@@ -52,10 +44,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                 return this._name;
             },
             set: function (value) {
-                value = (value || "").trim();
-                if(this.isDirectory) {
-                    value = FileUtils.trimTrailingSlashes(value);
-                }
+                value = FileUtils.trimTrailingSlashes((value || "").trim());
                 if(value && value.indexOf('/') >= 0) {
                     throw ('FAILURE: Invalid file name: "' + value + '".');
                 }
@@ -80,12 +69,11 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
         });
         Object.defineProperty(File.prototype, "size", {
             get: function () {
-                if(this.isDirectory) {
-                    return Object.getOwnPropertyNames(this.content).length;
-                } else {
-                    if(this.content instanceof ArrayBuffer) {
-                        (this.content).byteLength;
-                    }
+                var files = Object.getOwnPropertyNames(this.children);
+                for(var i = 0, file; file = this.children[files[i]]; i++) {
+                }
+                if(this.content instanceof ArrayBuffer) {
+                    return (this.content).byteLength;
                 }
                 return (this.content).length;
             },
@@ -99,31 +87,13 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
             enumerable: true,
             configurable: true
         });
-        Object.defineProperty(File.prototype, "isDirectory", {
-            get: function () {
-                return FileUtils.isDirectory(this);
-            },
-            enumerable: true,
-            configurable: true
-        });
         return File;
     })();    
     var FileUtils;
     (function (FileUtils) {
-        var rxDirectory = /^(?:\s*)application\/vnd\.baz\.directory(?:.*)$/;
         var rxRepeatingSlash = /\/{2,}/g;
         var rxTrailingSlash = /(.+?)(?:\/*)$/;
         var rxFilenameAndLocation = /^(\/(?:.*\/)?)(.*)$/;
-        function isDirectory(thing) {
-            if(typeof thing === "string") {
-                return rxDirectory.test(thing);
-            }
-            if(typeof thing === "object" && (thing).hasOwnProperty("type")) {
-                return rxDirectory.test(thing.type);
-            }
-            return false;
-        }
-        FileUtils.isDirectory = isDirectory;
         function normalizePath(value) {
             return trimTrailingSlashes((value || "").trim().replace(File._rxRepeatingSlash, '/'));
         }
@@ -144,8 +114,8 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
             absolutePath = normalizePath(absolutePath);
             var results = rxFilenameAndLocation.exec(absolutePath);
             return {
-                directory: results[1],
-                filename: results[2]
+                location: results[1],
+                name: results[2]
             };
         }
         FileUtils.getFilenameAndLocation = getFilenameAndLocation;
@@ -233,8 +203,9 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
             var root = {
                 name: '',
                 location: '/',
-                type: 'application/vnd.baz.directory.solution',
-                content: {
+                type: 'application/vnd.baz.solution',
+                content: null,
+                children: {
                 }
             };
             fileStore.put(new File(root)).onerror = function (ev) {
@@ -296,10 +267,6 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
             }).next(function (parentData, transaction) {
                 return function (cb) {
                     var parent = new File(parentData);
-                    if(!parent.isDirectory) {
-                        transaction.abort();
-                        return;
-                    }
                     parent.addChild(file);
                     transaction.objectStore(FileDb._FILE_STORE).put(parent.getStoreObject()).onsuccess = function (ev) {
                         return cb(transaction);
@@ -337,7 +304,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                             error: (ev.target).error
                         });
                     };
-                    transaction.objectStore(FileDb._FILE_STORE).get(pathInfo.directory).onsuccess = function (ev) {
+                    transaction.objectStore(FileDb._FILE_STORE).get(pathInfo.location).onsuccess = function (ev) {
                         var result = (ev.target).result;
                         if(typeof (result) === 'undefined') {
                             transaction.abort();
@@ -349,11 +316,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
             }).next(function (parentData, transaction) {
                 return function (cb) {
                     var parent = new File(parentData);
-                    if(!parent.isDirectory) {
-                        transaction.abort();
-                        return;
-                    }
-                    parent.removeChild(pathInfo.filename);
+                    parent.removeChild(pathInfo.name);
                     transaction.objectStore(FileDb._FILE_STORE).put(parent.getStoreObject()).onsuccess = function (ev) {
                         return cb(transaction);
                     };
@@ -367,6 +330,8 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                     });
                 };
             });
+        };
+        FileDb.prototype._traverseWithAction = function (root, action, transaction) {
         };
         return FileDb;
     })();    

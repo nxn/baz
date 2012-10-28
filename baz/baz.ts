@@ -1,14 +1,12 @@
 import fs = module('./filedb');
 import async = module('./async');
-//import ui    = module('./tree-view');
-
-declare var $;
 
 var test = {
     name: 'test.ts',
     type: 'text/plain; charset=UTF-8',
     location: '/',
-    content: new ArrayBuffer(32)
+    content: new ArrayBuffer(32),
+    children: null
 };
 
 var env = {
@@ -58,12 +56,3 @@ var solution =
             ]
         }
     ]
-
-//var tree = new ui.TreeView(
-//    { data: solution
-//    , parentSel: '#solution-explorer'
-//    , templateSel: '#tpl-tree-view'
-//    , indentAmount: 20
-//    }
-//);
-//$(() => tree.render());

@@ -46,11 +46,7 @@ class FSTreeNode implements IFSTreeNode {
         var $name = this._$this.append('<div/>').addClass('name').text(this._file.name);
 
         var $actions = this._$this.append('<div/>').addClass('actions');
-
-        if (this._db.utils.isDirectory(this._file)) {
-            var $add = $actions.append('<div/>').addClass('add');
-        }
-
+        var $add = $actions.append('<div/>').addClass('add');
         var $remove = $actions.append('<div/>').addClass('remove');
 
         var $contents = this._$this.append('<div/>').addClass('content');

@@ -7,7 +7,8 @@ define(["require", "exports", './filedb', './async'], function(require, exports,
         name: 'test.ts',
         type: 'text/plain; charset=UTF-8',
         location: '/',
-        content: new ArrayBuffer(32)
+        content: new ArrayBuffer(32),
+        children: null
     };
     var env = {
         debug: true,

@@ -3,12 +3,17 @@ interface IChildInfo {
     type : string;
 }
 
+interface IChildInfoDictionary {
+    [ filename : string ] : IChildInfo;
+}
+
 interface IFileInfo extends IChildInfo {
     location : string;
+    children : IChildInfoDictionary;
 }
 
 interface IFileData extends IFileInfo {
-    content : any;
+    content     : any;
 }
 
 interface IFileStoreObject extends IFileData {
@@ -17,7 +22,6 @@ interface IFileStoreObject extends IFileData {
 
 interface IFile extends IFileStoreObject {
     size                : number;
-    isDirectory         : bool;
 }
 
 interface IFileDbConfig {
@@ -27,8 +31,13 @@ interface IFileDbConfig {
 }
 
 interface IFileUtils {
-    getAbsolutePath (fileInfo   : IFileInfo)    : string;
-    isDirectory     (thing      : any)          : bool;
+    getAbsolutePath(fileInfo   : IFileInfo)         : string;
+    normalizePath(value : string)                   : string;
+    trimTrailingSlashes(value : string)             : string;
+    getFilenameAndLocation(absolutePath : string)   : { 
+        name : string; 
+        location : string;
+    };
 }
 
 interface IFileDb {

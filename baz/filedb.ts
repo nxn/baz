@@ -2,10 +2,6 @@
 
 import async = module('./async');
 
-interface IDBObjectStore {
-    delete : IDBRequest;
-}
-
 class File implements IFile {
     private static _rxRepeatingSlash = /\/{2,}/g;
     private static _rxTrailingSlash = /(.+?)(?:\/*)$/;
@@ -13,43 +9,32 @@ class File implements IFile {
     private _name       : string;
     private _location   : string;
 
-    type    : string;
-    content : any;
+    type        : string;
+    content     : any;
+    children    : IChildInfoDictionary;
 
     constructor(fileData : IFileData) {
-        this.type       = fileData.type;
-        this.content    = fileData.content;
         this.name       = fileData.name;
         this.location   = fileData.location;
+        this.type       = fileData.type;
+        this.content    = fileData.content;
+        this.children   = fileData.children || { };
     }
 
     addChild(file : IChildInfo) {
-        if (!this.isDirectory) {
-            return;
-        }
-
-        if (!this.content) {
-            this.content = { };
-        }
-        
-        var siblings : { [filename : string] : IChildInfo; } = this.content;
-        siblings[file.name] = { name : file.name, type : file.type };
+        this.children[file.name] = { name : file.name, type : file.type };
     }
 
     removeChild(filename) {
-        if (!this.isDirectory || !this.content) {
-            return;
-        }
-
-        var siblings : { [filename : string] : IChildInfo; } = this.content
-        delete siblings[filename];
+        delete this.children[filename];
     }
 
     getInfoObject() : IFileInfo {
         return {
             name        : this.name,
             type        : this.type,
-            location    : this.location
+            location    : this.location,
+            children    : this.children
         }
     }
 
@@ -59,6 +44,7 @@ class File implements IFile {
             location        : this.location,
             type            : this.type,
             content         : this.content,
+            children        : this.children,
             absolutePath    : this.absolutePath
         };
     }
@@ -68,11 +54,7 @@ class File implements IFile {
     }
 
     set name(value : string) {
-        value = (value || "").trim();
-
-        if (this.isDirectory) {
-            value = FileUtils.trimTrailingSlashes(value);
-        }
+        value = FileUtils.trimTrailingSlashes((value || "").trim())
 
         // any remaining slashes should throw exception
         if (value && value.indexOf('/') >= 0) {
@@ -97,11 +79,13 @@ class File implements IFile {
     }
 
     get size() {
-        if (this.isDirectory) {
-            return Object.getOwnPropertyNames(this.content).length;
+        var files = Object.getOwnPropertyNames(this.children);
+        for (var i = 0, file : IChildInfo; file = this.children[files[i]]; i++) {
+            // TODO: recursively sum sub sizes
         }
-        else if (this.content instanceof ArrayBuffer) {
-            (<ArrayBuffer> this.content).byteLength;
+
+        if (this.content instanceof ArrayBuffer) {
+            return (<ArrayBuffer> this.content).byteLength;
         }
 
         return (<string> this.content).length;
@@ -110,29 +94,12 @@ class File implements IFile {
     get absolutePath() {
         return FileUtils.getAbsolutePath(this);
     }
-
-    get isDirectory() {
-        return FileUtils.isDirectory(this);
-    }
 }
 
 module FileUtils {
-    var rxDirectory             = /^(?:\s*)application\/vnd\.baz\.directory(?:.*)$/;
     var rxRepeatingSlash        = /\/{2,}/g;
     var rxTrailingSlash         = /(.+?)(?:\/*)$/;
     var rxFilenameAndLocation   = /^(\/(?:.*\/)?)(.*)$/
-
-    export function isDirectory(thing : any) {
-        if (typeof thing === "string") {
-            return rxDirectory.test(thing);
-        }
-
-        if (typeof thing === "object" && (<Object> thing).hasOwnProperty("type")) {
-            return rxDirectory.test(thing.type);
-        }
-
-        return false;
-    }
 
     export function normalizePath(value : string) {
         return trimTrailingSlashes(
@@ -156,8 +123,8 @@ module FileUtils {
         absolutePath = normalizePath(absolutePath);
         var results = rxFilenameAndLocation.exec(absolutePath);
         return {
-            directory   : results[1],
-            filename    : results[2]
+            location    : results[1],
+            name        : results[2]
         }
     }
 }
@@ -251,8 +218,9 @@ class FileDb implements IFileDb {
         var root : IFileData = {
             name        : '',
             location    : '/',
-            type        : 'application/vnd.baz.directory.solution',
-            content     : { }
+            type        : 'application/vnd.baz.solution',
+            content     : null,
+            children    : { }
         }
 
         fileStore.put(new File(root))
@@ -328,12 +296,6 @@ class FileDb implements IFileDb {
             .next((parentData : IFileData, transaction : IDBTransaction) =>
                 cb => {
                     var parent = new File(parentData);
-
-                    if (!parent.isDirectory) {
-                        transaction.abort();
-                        return;
-                    }
-
                     parent.addChild(file);
 
                     transaction
@@ -381,7 +343,7 @@ class FileDb implements IFileDb {
 
                     transaction
                         .objectStore(FileDb._FILE_STORE)
-                        .get(pathInfo.directory)
+                        .get(pathInfo.location)
                         .onsuccess = (ev) => {
                             var result = (<any> ev.target).result;
 
@@ -399,12 +361,7 @@ class FileDb implements IFileDb {
                 cb => {
                     var parent = new File(parentData);
 
-                    if (!parent.isDirectory) {
-                        transaction.abort();
-                        return;
-                    }
-
-                    parent.removeChild(pathInfo.filename);
+                    parent.removeChild(pathInfo.name);
 
                     transaction
                         .objectStore(FileDb._FILE_STORE)
@@ -422,6 +379,13 @@ class FileDb implements IFileDb {
                         cb({ success: true, result: (<any> ev.target).result });
                     }
             );
+    }
+
+    private _traverseWithAction(
+        root : IFile, 
+        action : (file : IFile) => any, 
+        transaction : IDBTransaction
+    ) {
     }
 }
 

@@ -1,5 +1,5 @@
-///// <reference path="common.d.ts" />
-///// <reference path="filedb.d.ts" />
+// /// <reference path="common.d.ts" />
+// /// <reference path="filedb.d.ts" />
 
 //import async = module('./async');
 
