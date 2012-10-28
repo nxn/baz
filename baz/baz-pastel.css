@@ -1,0 +1,460 @@
+﻿*
+{ margin: 0px
+; padding: 0px
+}
+ul
+{ list-style: none
+}
+html 
+{ height: 100%
+}
+body
+{ background: #fff
+; color: #fff
+; font-family: Consolas
+; font-size: 0.7em
+; padding: 0px
+; height: 100%
+; overflow: hidden
+; cursor: default
+}
+
+#wrapper
+{ position: relative
+; height: 100%
+}
+
+#top
+{ height: 20px
+; background-color: #3b434d
+; position: absolute
+; top: 0px
+; left: 0px
+; right: 0px
+}
+
+#middle 
+{ position: absolute
+; top: 20px
+; bottom: 0px
+; left: 0px
+; right: 0px
+}
+
+#bottom 
+{ height: 25px
+; line-height: 20px
+; padding: 0px 10px
+; position: absolute
+; bottom: 0px
+; left: 0px
+; right: 0px
+; border-top: 1px solid #ddd
+}
+
+#logo
+{ font-family: 'AmaranthRegular'
+; font-size: 1.0em
+; line-height: 20px
+; position: absolute
+; right: 10px
+}
+#logo .color-2
+{ color: #8d4fb8
+}
+#logo .color-1
+{ color: #68c4ff
+}
+#logo .color-3
+{ color: #efefef
+}
+
+
+#top ul
+{ list-style: none
+; overflow: hidden
+}
+#top ul li
+{ float: left
+; height: 20px
+; line-height: 20px
+; padding: 0px 10px
+}
+
+#top ul.menu
+{ text-transform: uppercase
+; color: #ccc
+}
+#top ul li:hover
+{ background-color: #4c545e
+; color: #fff
+}
+
+#top div.break
+{ height: 20px
+; line-height: 20px
+; padding: 0px 10px
+; float: left
+; color: #4c545e
+; margin-top: 5px
+; font-family: 'Segoe UI Symbol'
+}
+#top ul.actions
+{ font-family: Webdings
+; font-size: 1.5em
+; color: #ccc
+; float: left
+}
+#top ul.actions li
+{ border-left: 1px solid #4c545e
+}
+#top ul.actions li:hover
+{ color: #68c4ff
+}
+#top ul.actions li:first-child
+{ border-left: none
+}
+#main-panel 
+{ position: absolute
+; top: 0px
+; bottom: 0px
+; left: 0px
+; right: 250px
+; border-top: 5px solid #68c4ff
+}
+#main-panel .tabs
+{ overflow: hidden
+; border-right: 1px solid #ddd
+; background: #efefef
+; background: -webkit-gradient(linear, 0% 0%, 0% 100%, from(#efefef), to(#fafafa))
+; background: -webkit-linear-gradient(top, #fafafa, #efefef)
+; background: -moz-linear-gradient(top, #fafafa, #efefef)
+; background: -ms-linear-gradient(top, #fafafa, #efefef)
+; background: -o-linear-gradient(top, #fafafa, #efefef)
+}
+#main-panel .tabs div
+{ float: left
+; height: 20px
+; line-height: 20px
+; padding: 0px 10px
+; color: #222
+}
+
+#tab-start .icon
+{ background-image: url(img/iconSweets2/16/dark/Misc/16-Home.png)
+; background-repeat: no-repeat
+; background-position: 50% 50%
+; width: 25px
+; height: 20px
+; padding: 0px !important
+}
+#main-panel .tabs .more
+{ padding: 0px !important
+; width: 16px
+; float: right
+}
+#main-panel .tabs .more .icon
+{ height: 20px
+; width: 16px
+; padding: 0px
+; background-image: url(img/iconSweets2/16/light/Arrows/16-Bended-Arrow-Down.png)
+; background-repeat: no-repeat
+; background-position: 50% 50%
+}
+#main-panel .tabs .more:hover .icon
+{ background-image: url(img/iconSweets2/16/dark/Arrows/16-Bended-Arrow-Down.png)
+}
+#main-panel .tabs > div:hover
+{ background-color: #fafafa
+; background: -webkit-gradient(linear, 0% 0%, 0% 100%, from(#fafafa), to(#ffffff))
+; background: -webkit-linear-gradient(top, #ffffff, #fafafa)
+; background: -moz-linear-gradient(top, #ffffff, #fafafa)
+; background: -ms-linear-gradient(top, #ffffff, #fafafa)
+; background: -o-linear-gradient(top, #ffffff, #fafafa)
+; color: #8d4fb8
+}
+#main-panel .tabs div.active
+{ background-color: #68c4ff
+; background: -webkit-gradient(linear, 0% 0%, 0% 100%, from(#00aeff), to(#68c4ff))
+; background: -webkit-linear-gradient(top, #68c4ff, #00aeff)
+; background: -moz-linear-gradient(top, #68c4ff, #00aeff)
+; background: -ms-linear-gradient(top, #68c4ff, #00aeff)
+; background: -o-linear-gradient(top, #68c4ff, #00aeff)
+; color: #fff
+}
+#content-area div.editor
+{ cursor: text !important
+}
+#content-area
+{ background: #fff
+; border-right: 1px solid #ddd
+; position: absolute
+; top: 20px
+; left: 0px
+; right: 0px
+; bottom: 20px
+; padding: 10px
+; color: #000
+; border-top: 1px solid #ddd
+; border-bottom: 1px solid #ddd
+}
+#content-area .code
+{ margin-left: 50px
+}
+#content-area .line-numbers
+{ position: absolute
+; width: 30px
+; left: 0px
+; right: 0px
+; bottom: 0px
+; top: 0px
+; border-right: 1px solid #ddd
+; padding: 10px
+; text-align: right
+; background: #fafafa
+; color: #68c4ff
+}
+
+#content-area > div
+{ display: none
+; position: absolute
+; right: 0px
+; left: 0px
+; top: 0px
+; bottom: 0px
+}
+#content-area div.active
+{ display: block
+}
+
+#right-panel
+{ position: absolute
+; top: 0px
+; right: 0px
+; bottom: 0px
+; width: 250px
+; color: #222
+; border-top: 5px solid #c675ff
+}
+
+
+
+
+#solution-explorer
+{ background: #efefef
+; position: absolute
+; top:20px
+; left: 0px
+; right: 0px
+; bottom: 20px
+; border-top: 1px solid #ddd
+; border-bottom: 1px solid #ddd
+; overflow-y: scroll
+}
+
+#solution-explorer > div
+{ overflow: hidden
+; height: 20px
+; line-height: 20px
+}
+/*#solution-explorer > div:nth-child(even)
+{ background-color: #f4f4f4
+}*/
+#solution-explorer > div:hover
+{ background-color: #fafafa
+}
+#solution-explorer .name
+{ float: left
+}
+#solution-explorer .icon
+{ float: left
+; width: 16px
+; height: 20px
+; margin-right: 5px
+; background-repeat: no-repeat
+; background-position: 50% 50%
+}
+/*#solution-explorer .solution
+{ padding-top: 5px
+; padding-bottom: 5px
+; font-size: 1.2em
+; font-family: 'Segoe UI light'
+}
+#solution-explorer .solution .icon
+{ margin-right: 10px
+}
+    */
+#solution-explorer .solution .icon
+{ background-image: url(img/iconSweets2/16/dark/Misc/16-File-Cabinet.png)
+}
+#solution-explorer .project .icon
+{ background-image: url(img/iconSweets2/16/dark/Misc/16-Archive.png)
+}
+#solution-explorer .file .icon
+{ background-image: url(img/iconSweets2/16/dark/Files/16-Document.png)
+}
+#solution-explorer .directory .icon
+{ background-image: url(img/iconSweets2/16/dark/Misc/16-Folder.png)
+}
+
+#solution-explorer .actions 
+{ float: right
+; height: 20px
+; overflow: hidden
+; margin-right: 5px
+; display: none
+}
+#solution-explorer > div:hover .actions
+{ display: block !important
+}
+#solution-explorer .actions div
+{ margin-left: 5px
+}
+  #solution-explorer .actions .add
+, #solution-explorer .actions .remove
+{ width: 16px
+; height: 20px
+; background-repeat: no-repeat
+; background-image: url(img/iconSweets1/16/light/16-Plus.png)
+; background-position: 50% 50%
+; float: left
+}
+#solution-explorer .actions .remove
+{ background-image: url(img/iconSweets1/16/light/16-Minus.png)
+}
+#solution-explorer .actions .add:hover
+{ background-image: url(img/iconSweets1/16/dark/16-Plus.png)
+}
+#solution-explorer .actions .remove:hover
+{ background-image: url(img/iconSweets1/16/dark/16-Minus.png)
+}
+#solution-explorer .file .actions .add
+{ display: none
+}
+#solution-explorer .solution .actions .remove
+{ display: none
+}
+
+
+
+#statusbar .icon
+{ background-image: url(img/iconSweets1/16/dark/16-Check.png) 
+; background-position: 50% 50%
+; background-repeat: no-repeat
+; margin: 0px 10px 0px 5px
+; width: 16px
+; height: 20px
+}
+
+  #right-panel div.info
+, #statusbar
+{ background-color: #efefef
+; background: -webkit-gradient(linear, 0% 0%, 0% 100%, from(#dadada), to(#efefef))
+; background: -webkit-linear-gradient(top, #efefef, #dadada)
+; background: -moz-linear-gradient(top, #efefef, #dadada)
+; background: -ms-linear-gradient(top, #efefef, #dadada)
+; background: -o-linear-gradient(top, #efefef, #dadada)
+; color: #555
+; padding: 0px
+; height: 20px
+; line-height: 20px
+; position: absolute
+; bottom: 0px
+; left: 0px
+; right: 0px
+; overflow: hidden
+}
+
+#right-panel div.info
+{ padding-right: 10px
+}
+
+.float-left
+{ float: left
+}
+
+.float-right
+{ float: right
+}
+  #content-area
+, #solution
+{ font-size: 1.2em
+; line-height: 18px
+}
+
+#right-panel ul.menu
+{ background: #efefef
+; background: -webkit-gradient(linear, 0% 0%, 0% 100%, from(#efefef), to(#fafafa))
+; background: -webkit-linear-gradient(top, #fafafa, #efefef)
+; background: -moz-linear-gradient(top, #fafafa, #efefef)
+; background: -ms-linear-gradient(top, #fafafa, #efefef)
+; background: -o-linear-gradient(top, #fafafa, #efefef)
+; height: 20px
+; line-height: 20px
+; padding: 0px
+; overflow: hidden
+}
+
+#right-panel ul.menu li
+{ height: 20px
+; line-height: 20px
+; width: 32px
+; float: left
+; text-align: center
+; background-repeat: no-repeat 
+; background-position: 50% 50%
+}
+#right-panel ul.menu li:first-child
+{ border-left: 1px solid #ddd
+; margin-left: -1px
+}
+#right-panel ul.menu li:hover
+{ background-color: #fafafa
+; background: -webkit-gradient(linear, 0% 0%, 0% 100%, from(#fafafa), to(#ffffff))
+; background: -webkit-linear-gradient(top, #ffffff, #fafafa)
+; background: -moz-linear-gradient(top, #ffffff, #fafafa)
+; background: -ms-linear-gradient(top, #ffffff, #fafafa)
+; background: -o-linear-gradient(top, #ffffff, #fafafa)
+}
+#right-panel ul.menu li.active
+{ background-color: #8d4fb8/*c675ff*/
+; background: -webkit-gradient(linear, 0% 0%, 0% 100%, from(#b66fe8), to(#c675ff))
+; background: -webkit-linear-gradient(top, #c675ff, #b66fe8)
+; background: -moz-linear-gradient(top, #c675ff, #b66fe8)
+; background: -ms-linear-gradient(top, #c675ff, #b66fe8)
+; background: -o-linear-gradient(top, #c675ff, #b66fe8)
+}
+#right-panel ul.menu li .icon
+{ height: 20px
+; background-position: 50% 50%
+; background-repeat: no-repeat
+}
+#right-panel ul.menu li.project .icon
+{ background-image: url(img/iconSweets2/16/dark/Files/16-Documents.png)
+}
+#right-panel ul.menu li.project.active .icon
+{ background-image: url(img/iconSweets2/16/shine/Files/16-Documents.png)
+}
+#right-panel ul.menu li.source-control .icon
+{ background-image: url(img/iconSweets2/16/dark/Misc/16-Vault.png)
+}
+#right-panel ul.menu li.source-control.active .icon
+{ background-image: url(img/iconSweets2/16/shine/Misc/16-Vault.png)
+}
+#right-panel ul.menu li.properties .icon
+{ background-image: url(img/iconSweets2/16/dark/Settings/16-Cog.png)
+}
+#right-panel ul.menu li.properties.active .icon
+{ background-image: url(img/iconSweets2/16/shine/Settings/16-Cog.png)
+}
+
+@font-face {
+    font-family: 'AmaranthRegular';
+    src: url('fonts/Amaranth-webfont.eot');
+    src: url('fonts/Amaranth-webfont.eot?#iefix') format('embedded-opentype'),
+         url('fonts/Amaranth-webfont.woff') format('woff'),
+         url('fonts/Amaranth-webfont.ttf') format('truetype'),
+         url('fonts/Amaranth-webfont.svg#AmaranthRegular') format('svg');
+    font-weight: normal;
+    font-style: normal;
+}

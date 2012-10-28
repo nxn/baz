@@ -1,0 +1,251 @@
+﻿<!DOCTYPE html>
+
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <title>baz("Project Name");</title>
+    <link rel="stylesheet" href="baz.css" type="text/css" />
+    <script src="require.js"></script>
+    <script src="handlebars-1.0.rc.1.js"></script>
+    <script src="jquery-1.8.2.min.js"></script>
+    <script src="ace/src-noconflict/ace.js"></script>
+    <script>
+        window.indexedDB = window.indexedDB || webkitIndexedDB || mozIndexedDB || msIndexedDB;
+
+        require(['./baz'], function(baz) { });
+
+        $(function() { 
+            var editor = ace.edit("content-2");
+            //editor.setTheme("ace/theme/dawn");
+            editor.setPrintMarginColumn(120);
+            editor.getSession().setMode("ace/mode/typescript");
+        });
+    </script>
+    <style type="text/css">
+        .ace-tm .ace_gutter { background-color: #fafafa !important; color: #8d4fb8 !important; border-right: 1px dotted #ddd }
+        .ace_gutter_active_line { background-color: #efefef !important; }
+        .ace-tm .ace_marker-layer .ace_active_line { background-color: rgba(0, 0, 0, 0.022) !important; }
+        .ace-tm .ace_print_margin { width: auto !important; border-left: 1px dotted #ddd; background: rgba(0, 0, 0, 0.022) !important; right: 0px !important}
+        /*.ace_editor .ace_print_margin_layer { border-left: 1px dotted #ddd; }*/
+    </style>
+    <script id="tpl-tree-view" type="text/x-handlebars-template">
+        {{#each this}}
+        <div class="{{type}}" style="padding-left: {{indent}}px;">
+            <div class="toggle-content-view">
+                <div class="btn"></div>
+            </div>
+            <div class="icon"></div>
+            <div class="name">{{name}}</div>
+            <div class="actions">
+                <div class="add"></div>
+                <div class="remove"></div>
+            </div>
+        </div>
+        {{/each}}
+    </script>
+</head>
+<body>
+    <div id="wrapper">
+        <div id="top">
+            <div id="logo">
+                <span class="color-1">baz(<span class="color-2">"<span class="color-3">Project Name</span>"</span>)<span class="color-2">;</span></span>
+            </div>
+            <ul class="menu">
+                <li>File</li>
+                <li>Edit</li>
+                <li>Project</li>
+                <li>Settings</li>
+                <li>Help</li>
+            </ul>
+<!--            <ul class="actions">
+                <li>Í</li>
+                <li>¬</li>
+            </ul>
+            <div class="break">&#x2015;</div>
+            <ul class="actions">
+                <li>4</li>
+                <li>:</li>
+                <li>;</li>
+                <li>&lt;</li>
+            </ul>-->
+        </div>
+        <div id="middle">
+            <div id="main-panel">
+                <div class="tabs">
+                    <div id="tab-start"><div class="icon"></div></div>
+                    <div id="tab-content-0">baz.css</div>
+                    <div id="tab-content-1">default.html</div>
+                    <div id="tab-content-2" class="active">baz.ts</div>
+                    <div class="more"><div class="icon"></div></div>
+                </div>
+                <div id="content-area">
+                    <div id="start">
+                        <!--<div class="line-numbers">
+                            1
+                        </div>
+                        <div class="code">
+                            console.log("Hello World!");
+                        </div>-->
+                    </div>
+                    <div id="content-0" class="editor"></div>
+                    <div id="content-1" class="editor"></div>
+                    <div id="content-2" class="editor active">module abstract {
+    export interface ICallback {
+        (...args: any[]): any;
+    }
+    export interface IAsyncOp {
+        (callback: ICallback): any;
+    }
+}
+
+export class Chain {
+    task : abstract.IAsyncOp;
+
+    constructor(...tasks : abstract.IAsyncOp[]) {
+        if (tasks.length === 1)     this.task = tasks[0];
+        else if (tasks.length > 1)  this.task = cb => this.sync(() => cb.apply(null, arguments), tasks);
+        else                        this.task = cb => cb();
+    }
+
+    // Takes a function that will be invoked with the arguments that were given to the current async task's
+    // callback. So if the current task executes its callback with data that was returned from an ajax call 
+    // the function given to 'next' will get this data for processing and creating a new async task. The 
+    // given function is expected to return one, or more, new asynchronous operations.
+    next(getNextAsyncTasks : Function) {
+
+        // Returns a new async operation that, when ready, will first execute this async operation using an
+        // intermediate callback. The callback's purpose is to forward the task's result arguments to one,
+        // or more, new operations that are returned by the passed in 'getNextAsyncTasks' function. The 
+        // resulting operations will be invoked when the new Async object receives its callback.
+        return new Chain(
+            (cb : abstract.ICallback) =>
+                this.task(
+                    () => { 
+                        var result = getNextAsyncTasks.apply(null, arguments);
+
+                        if (result instanceof Function)     result(cb);
+                        else if (result instanceof Array)   this.sync(cb, result);
+                        else                                cb();
+                    }
+                )
+        );
+    }
+
+    // Executes this async task with the given callback function for handling the task's results
+    last(cb : abstract.ICallback) {
+        this.task(cb);
+    }
+
+    // Expects a callback and an array of async tasks to execute. Once all tasks are complete, their 
+    // resulting callback arguments will be forwarded to the given callback function. Each task's callback
+    // arguments will be assigned to a single parameter of the overall callback function in order that the
+    // tasks were given. I.e., the first task will have the first callback parameter, the second task will
+    // have the second callback parameter, etc.
+    sync(cb: (...resultArgs: IArguments[]) => void, tasks: abstract.IAsyncOp[]) {
+        var resultArgs : IArguments[] = [], completed = 0;
+
+        var getCb = (i) => {
+            return () => {
+                resultArgs[i] = arguments;
+                completed++;
+
+                if (completed === tasks.length) cb.apply(null, resultArgs);
+            }
+        };
+
+        for (var i = 0, op; op = tasks[i]; i++) op(getCb(i));
+    }
+}</div>
+                </div>
+                <div id="statusbar">
+                    <div class="icon float-left"></div>
+                    <div class="float-left">Ready</div>
+                    <div class="float-right">Ln 50 :: Col 58 :: Ch 68</div>
+                </div>
+            </div>
+
+            <div id="right-panel">
+                <ul class="menu">
+                    <li class="project active"><div class="icon"></div></li>
+                    <li class="source-control"><div class="icon"></div></li>
+                    <li class="properties"><div class="icon"></div></li>
+                </ul>
+                <div id="solution-explorer">
+<!--                    <div class="project">
+                        <div class="name">Some Walrus Project</div>
+                        <div class="contents">
+                            <div class="folder">
+                                <div class="name">Fonts:</div>
+                                <div class="actions">
+                                    <div class="add"></div>
+                                    <div class="remove"></div>
+                                </div>
+                                <div class="contents">
+                                    <div class="folder">
+                                        <div class="name">Cocks:</div>
+                                        <div class="contents">
+                                            <div class="file">
+                                                <div class="name">A lot.ttf</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="file">
+                                        <div class="name">Amaranth-webfont.eot</div>
+                                        <div class="actions">
+                                            <div class="remove"></div>
+                                        </div>
+                                    </div>
+                                    <div class="file">
+                                        <div class="name">Amaranth-webfont.svg</div>
+                                        <div class="actions">
+                                            <div class="remove"></div>
+                                        </div>
+                                    </div>
+                                    <div class="file">
+                                        <div class="name">Amaranth-webfont.ttf</div>
+                                        <div class="actions">
+                                            <div class="remove"></div>
+                                        </div>
+                                    </div>
+                                    <div class="file">
+                                        <div class="name">Amaranth-webfont.woff</div>
+                                        <div class="actions">
+                                            <div class="remove"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="file">
+                                <div class="name">baz.css</div>
+                                <div class="actions">
+                                    <div class="remove"></div>
+                                </div>
+                            </div>
+                            <div class="file">
+                                <div class="name">baz.ts</div>
+                                <div class="actions">
+                                    <div class="remove"></div>
+                                </div>
+                            </div>
+                            <div class="file">
+                                <div class="name">default.html</div>
+                                <div class="actions">
+                                    <div class="remove"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>-->
+                </div>
+                <div class="options">
+
+                </div>
+                <div class="info">
+                    <div class="float-right">
+                        1 Project :: 3 Files
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
