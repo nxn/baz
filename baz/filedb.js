@@ -171,7 +171,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                 var request = FileDb._INDEXEDDB.open(_this.name, _this.version);
                 request.onsuccess = function (ev) {
                     var result = request.result;
-                    _this._env.log('\tOpened database "%s", version "%d".', result.name, result.version);
+                    _this._env.log('\tSUCCESS: Opened database "%s", version "%d".', result.name, result.version);
                     FileDb._OPEN_DBS[_this.name] = result;
                     cb(result);
                 };
@@ -238,48 +238,52 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
             var _this = this;
             var file = new File(fileData);
             this._env.log('Saving "%s" to database "%s"...', file.absolutePath, this.name);
-            this._getDb().next(function (db) {
-                return function (cb) {
-                    var transaction = db.transaction(FileDb._FILE_STORE, FileDb._READ_WRITE);
-                    transaction.onerror = function (ev) {
-                        _this._env.log('\tFAILURE: Could not save "%s" to database "%s".', file.absolutePath, _this.name);
-                        cb({
-                            success: false,
-                            error: (ev.target).error
-                        });
-                    };
-                    transaction.onabort = function (ev) {
-                        _this._env.log('\tFAILURE: Transaction aborted while saving "%s" to database "%s".', file.absolutePath, _this.name);
-                        cb({
-                            success: false,
-                            error: (ev.target).error
-                        });
-                    };
-                    transaction.objectStore(FileDb._FILE_STORE).get(file.location).onsuccess = function (ev) {
-                        var result = (ev.target).result;
-                        if(typeof result === 'undefined') {
-                            transaction.abort();
-                            return;
-                        }
-                        cb(result, transaction);
-                    };
-                }
-            }).next(function (parentData, transaction) {
-                return function (cb) {
-                    var parent = new File(parentData);
-                    parent.addChild(file);
-                    transaction.objectStore(FileDb._FILE_STORE).put(parent.getStoreObject()).onsuccess = function (ev) {
-                        return cb(transaction);
-                    };
-                }
-            }).done(function (transaction) {
-                transaction.objectStore(FileDb._FILE_STORE).put(file.getStoreObject()).onsuccess = function (ev) {
-                    _this._env.log('\tSUCCESS: Saved "%s" to database "%s".', file.absolutePath, _this.name);
+            this._getDb().done(function (db) {
+                var transaction = db.transaction(FileDb._FILE_STORE, FileDb._READ_WRITE);
+                transaction.onerror = function (ev) {
+                    _this._env.log('\tFAILURE: Could not save "%s" to database "%s".', file.absolutePath, _this.name);
+                    cb({
+                        success: false,
+                        error: (ev.target).error
+                    });
+                };
+                transaction.onabort = function (ev) {
+                    _this._env.log('\tFAILURE: Transaction aborted while saving "%s" to database "%s".', file.absolutePath, _this.name);
+                    cb({
+                        success: false,
+                        error: (ev.target).error
+                    });
+                };
+                transaction.oncomplete = function (ev) {
+                    _this._env.log('\tSUCCESS: Transaction for saving "%s" to database "%s" completed.', file.absolutePath, _this.name);
                     cb({
                         success: true,
                         result: (ev.target).result
                     });
                 };
+                async.newTask(function (cb) {
+                    return transaction.objectStore(FileDb._FILE_STORE).get(file.location).onsuccess = function (ev) {
+                        var result = (ev.target).result;
+                        if(typeof result === 'undefined') {
+                            (ev.target).transaction.abort();
+                            return;
+                        }
+                        cb(result);
+                    };
+                }).next(function (parentData) {
+                    var parent = new File(parentData);
+                    parent.addChild(file);
+                    return function (cb) {
+                        return transaction.objectStore(FileDb._FILE_STORE).put(parent.getStoreObject()).onsuccess = cb;
+                    }
+                }).done(function () {
+                    return _this._env.log('\t\tSUCCESS: Added reference "%s" to parent "%s".', file.name, file.location);
+                });
+                async.newTask(function (cb) {
+                    return transaction.objectStore(FileDb._FILE_STORE).put(file.getStoreObject()).onsuccess = cb;
+                }).done(function () {
+                    return _this._env.log('\t\tSUCCESS: Saved "%s" to database "%s".', file.absolutePath, _this.name);
+                });
             });
         };
         FileDb.prototype.del = function (absolutePath, cb) {
@@ -319,12 +323,14 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                         }
                         cb(result);
                     };
-                }).done(function (parentData) {
+                }).next(function (parentData) {
                     var parent = new File(parentData);
                     parent.removeChild(pathInfo.name);
-                    transaction.objectStore(FileDb._FILE_STORE).put(parent.getStoreObject()).onsuccess = function (ev) {
-                        _this._env.log('\t\tSUCCESS: Removed reference "%s" from parent "%s".', pathInfo.name, parent.absolutePath);
-                    };
+                    return function (cb) {
+                        return transaction.objectStore(FileDb._FILE_STORE).put(parent.getStoreObject()).onsuccess = cb;
+                    }
+                }).done(function () {
+                    return _this._env.log('\t\tSUCCESS: Removed reference "%s" from parent "%s".', pathInfo.name, pathInfo.location);
                 });
                 async.newTask(function (cb) {
                     return transaction.objectStore(FileDb._FILE_STORE).get(absolutePath).onsuccess = function (ev) {
@@ -335,13 +341,17 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                         }
                         cb(result);
                     };
-                }).done(function (itemData) {
+                }).next(function (itemData) {
                     var item = new File(itemData);
-                    _this._traverseWithAction(item, function (child) {
-                        transaction.objectStore(FileDb._FILE_STORE).delete(child.absolutePath).onsuccess = function (ev) {
-                            _this._env.log('\t\tSUCCESS: Removing item "%s" from database "%s".', child.absolutePath, _this.name);
-                        };
-                    }, transaction);
+                    return function (cb) {
+                        return _this._traverseWithAction(item, function (child) {
+                            transaction.objectStore(FileDb._FILE_STORE).delete(child.absolutePath).onsuccess = function (ev) {
+                                return cb(child);
+                            };
+                        }, transaction);
+                    }
+                }).done(function (child) {
+                    return _this._env.log('\t\tSUCCESS: Removing item "%s" from database "%s".', child.absolutePath, _this.name);
                 });
             });
         };
