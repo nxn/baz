@@ -93,7 +93,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
     (function (FileUtils) {
         var rxRepeatingSlash = /\/{2,}/g;
         var rxTrailingSlash = /(.+?)(?:\/*)$/;
-        var rxFilenameAndLocation = /^(\/(?:.*\/)?)(.*)$/;
+        var rxFilenameAndLocation = /^(\/(?:.*(?=\/))?)\/?(.*)$/;
         function normalizePath(value) {
             return trimTrailingSlashes((value || "").trim().replace(File._rxRepeatingSlash, '/'));
         }
@@ -107,10 +107,10 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
         }
         FileUtils.trimTrailingSlashes = trimTrailingSlashes;
         function getAbsolutePath(fileInfo) {
-            return fileInfo.location + fileInfo.name;
+            return normalizePath(fileInfo.location + '/' + fileInfo.name);
         }
         FileUtils.getAbsolutePath = getAbsolutePath;
-        function getFilenameAndLocation(absolutePath) {
+        function getPathInfo(absolutePath) {
             absolutePath = normalizePath(absolutePath);
             var results = rxFilenameAndLocation.exec(absolutePath);
             return {
@@ -118,7 +118,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                 name: results[2]
             };
         }
-        FileUtils.getFilenameAndLocation = getFilenameAndLocation;
+        FileUtils.getPathInfo = getPathInfo;
     })(FileUtils || (FileUtils = {}));
 
     var FileDb = (function () {
@@ -286,52 +286,82 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
             var _this = this;
             absolutePath = FileUtils.normalizePath(absolutePath);
             this._env.log('Removing "%s" from database "%s"...', absolutePath, this.name);
-            var pathInfo = FileUtils.getFilenameAndLocation(absolutePath);
-            this._getDb().next(function (db) {
-                return function (cb) {
-                    var transaction = db.transaction(FileDb._FILE_STORE, FileDb._READ_WRITE);
-                    transaction.onerror = function (ev) {
-                        _this._env.log('\tFAILURE: Could not remove "%s" from database "%s".', absolutePath, _this.name);
-                        cb({
-                            success: false,
-                            error: (ev.target).error
-                        });
-                    };
-                    transaction.onabort = function (ev) {
-                        _this._env.log('\tFAILURE: Transaction aborted while deleting "%s" from database "%s".', absolutePath, _this.name);
-                        cb({
-                            success: false,
-                            error: (ev.target).error
-                        });
-                    };
-                    transaction.objectStore(FileDb._FILE_STORE).get(pathInfo.location).onsuccess = function (ev) {
-                        var result = (ev.target).result;
-                        if(typeof (result) === 'undefined') {
-                            transaction.abort();
-                            return;
-                        }
-                        cb(result, transaction);
-                    };
-                }
-            }).next(function (parentData, transaction) {
-                return function (cb) {
-                    var parent = new File(parentData);
-                    parent.removeChild(pathInfo.name);
-                    transaction.objectStore(FileDb._FILE_STORE).put(parent.getStoreObject()).onsuccess = function (ev) {
-                        return cb(transaction);
-                    };
-                }
-            }).done(function (transaction) {
-                return transaction.objectStore(FileDb._FILE_STORE).delete(absolutePath).onsuccess = function (ev) {
-                    _this._env.log('\tSUCCESS: Removed  "%s" from database "%s".', absolutePath, _this.name);
+            var pathInfo = FileUtils.getPathInfo(absolutePath);
+            this._getDb().done(function (db) {
+                var transaction = db.transaction(FileDb._FILE_STORE, FileDb._READ_WRITE);
+                transaction.onerror = function (ev) {
+                    _this._env.log('\tFAILURE: Could not remove "%s" from database "%s".', absolutePath, _this.name);
+                    cb({
+                        success: false,
+                        error: (ev.target).error
+                    });
+                };
+                transaction.onabort = function (ev) {
+                    _this._env.log('\tFAILURE: Transaction aborted while deleting "%s" from database "%s".', absolutePath, _this.name);
+                    cb({
+                        success: false,
+                        error: (ev.target).error
+                    });
+                };
+                transaction.oncomplete = function (ev) {
+                    _this._env.log('\tSUCCESS: Transaction for removal of "%s" from database "%s" completed.', absolutePath, _this.name);
                     cb({
                         success: true,
                         result: (ev.target).result
                     });
                 };
+                async.newTask(function (cb) {
+                    return transaction.objectStore(FileDb._FILE_STORE).get(pathInfo.location).onsuccess = function (ev) {
+                        var result = (ev.target).result;
+                        if(typeof (result) === 'undefined') {
+                            (ev.target).transaction.abort();
+                            return;
+                        }
+                        cb(result);
+                    };
+                }).done(function (parentData) {
+                    var parent = new File(parentData);
+                    parent.removeChild(pathInfo.name);
+                    transaction.objectStore(FileDb._FILE_STORE).put(parent.getStoreObject()).onsuccess = function (ev) {
+                        _this._env.log('\t\tSUCCESS: Removed reference "%s" from parent "%s".', pathInfo.name, parent.absolutePath);
+                    };
+                });
+                async.newTask(function (cb) {
+                    return transaction.objectStore(FileDb._FILE_STORE).get(absolutePath).onsuccess = function (ev) {
+                        var result = (ev.target).result;
+                        if(typeof (result) === 'undefined') {
+                            (ev.target).transaction.abort();
+                            return;
+                        }
+                        cb(result);
+                    };
+                }).done(function (itemData) {
+                    var item = new File(itemData);
+                    _this._traverseWithAction(item, function (child) {
+                        transaction.objectStore(FileDb._FILE_STORE).delete(child.absolutePath).onsuccess = function (ev) {
+                            _this._env.log('\t\tSUCCESS: Removing item "%s" from database "%s".', child.absolutePath, _this.name);
+                        };
+                    }, transaction);
+                });
             });
         };
         FileDb.prototype._traverseWithAction = function (root, action, transaction) {
+            var _this = this;
+            var childNames = Object.getOwnPropertyNames(root.children);
+            for(var i, child; child = root.children[childNames[i]]; i++) {
+                transaction.objectStore(FileDb._FILE_STORE).get(FileUtils.getAbsolutePath({
+                    name: child.name,
+                    location: FileUtils.getAbsolutePath(root)
+                })).onsuccess = function (ev) {
+                    var result = (ev.target).result;
+                    if(result) {
+                        var file = new File(result);
+                        _this._traverseWithAction(file, action, transaction);
+                        action(file);
+                    }
+                };
+            }
+            action(root);
         };
         return FileDb;
     })();    

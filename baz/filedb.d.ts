@@ -3,6 +3,11 @@ interface IChildInfo {
     type : string;
 }
 
+interface IPathInfo {
+    name        : string;
+    location    : string;
+}
+
 interface IChildInfoDictionary {
     [ filename : string ] : IChildInfo;
 }
@@ -31,13 +36,10 @@ interface IFileDbConfig {
 }
 
 interface IFileUtils {
-    getAbsolutePath(fileInfo   : IFileInfo)         : string;
+    getAbsolutePath(padthInfo : IPathInfo)          : string;
     normalizePath(value : string)                   : string;
     trimTrailingSlashes(value : string)             : string;
-    getFilenameAndLocation(absolutePath : string)   : { 
-        name : string; 
-        location : string;
-    };
+    getPathInfo(absolutePath : string)              : IPathInfo;
 }
 
 interface IFileDb {

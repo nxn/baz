@@ -99,7 +99,7 @@ class File implements IFile {
 module FileUtils {
     var rxRepeatingSlash        = /\/{2,}/g;
     var rxTrailingSlash         = /(.+?)(?:\/*)$/;
-    var rxFilenameAndLocation   = /^(\/(?:.*\/)?)(.*)$/
+    var rxFilenameAndLocation   = /^(\/(?:.*(?=\/))?)\/?(.*)$/
 
     export function normalizePath(value : string) {
         return trimTrailingSlashes(
@@ -115,11 +115,11 @@ module FileUtils {
         return value;
     }
 
-    export function getAbsolutePath(fileInfo : IFileInfo) {
-        return fileInfo.location + fileInfo.name;
+    export function getAbsolutePath(fileInfo : IPathInfo) {
+        return normalizePath(fileInfo.location + '/' + fileInfo.name);
     }
 
-    export function getFilenameAndLocation(absolutePath : string) {
+    export function getPathInfo(absolutePath : string) {
         absolutePath = normalizePath(absolutePath);
         var results = rxFilenameAndLocation.exec(absolutePath);
         return {
@@ -321,26 +321,35 @@ class FileDb implements IFileDb {
         absolutePath = FileUtils.normalizePath(absolutePath);
 
         this._env.log('Removing "%s" from database "%s"...', absolutePath, this.name);
-        var pathInfo = FileUtils.getFilenameAndLocation(absolutePath);
+        var pathInfo = FileUtils.getPathInfo(absolutePath);
 
-        this._getDb()
-            .next((db : IDBDatabase) =>
-                cb => {
-                    var transaction = db.transaction(FileDb._FILE_STORE, FileDb._READ_WRITE);
-                    transaction.onerror = (ev) => {
-                        this._env.log('\tFAILURE: Could not remove "%s" from database "%s".', absolutePath, this.name);
-                        cb({ success: false, error: (<any> ev.target).error });
-                    }
+        this._getDb().done((db : IDBDatabase) => {
+                var transaction = db.transaction(FileDb._FILE_STORE, FileDb._READ_WRITE);
 
-                    transaction.onabort = (ev) => {
-                        this._env.log(
-                            '\tFAILURE: Transaction aborted while deleting "%s" from database "%s".',
-                            absolutePath,
-                            this.name
-                        );
-                        cb({ success: false, error: (<any> ev.target).error });
-                    } 
+                transaction.onerror = (ev) => {
+                    this._env.log('\tFAILURE: Could not remove "%s" from database "%s".', absolutePath, this.name);
+                    cb({ success: false, error: (<any> ev.target).error });
+                }
 
+                transaction.onabort = (ev) => {
+                    this._env.log(
+                        '\tFAILURE: Transaction aborted while deleting "%s" from database "%s".',
+                        absolutePath,
+                        this.name
+                    );
+                    cb({ success: false, error: (<any> ev.target).error });
+                }
+
+                transaction.oncomplete = (ev) => {
+                    this._env.log(
+                        '\tSUCCESS: Transaction for removal of "%s" from database "%s" completed.',
+                         absolutePath, 
+                         this.name
+                    );
+                    cb({ success: true, result: (<any> ev.target).result });
+                }
+
+                async.newTask(cb => 
                     transaction
                         .objectStore(FileDb._FILE_STORE)
                         .get(pathInfo.location)
@@ -348,17 +357,13 @@ class FileDb implements IFileDb {
                             var result = (<any> ev.target).result;
 
                             if (typeof(result) === 'undefined') {
-                                transaction.abort();
+                                (<any> ev.target).transaction.abort();
                                 return;
                             }
 
-                            cb(result, transaction);
+                            cb(result);
                         }
-                }
-            )
-            
-            .next((parentData : IFileData, transaction : IDBTransaction) =>
-                cb => {
+                ).done((parentData : IFileData) => {
                     var parent = new File(parentData);
 
                     parent.removeChild(pathInfo.name);
@@ -366,26 +371,80 @@ class FileDb implements IFileDb {
                     transaction
                         .objectStore(FileDb._FILE_STORE)
                         .put(parent.getStoreObject())
-                        .onsuccess = (ev) => cb(transaction);
-                }
-            )
+                        .onsuccess = (ev) => {
+                            this._env.log(
+                                '\t\tSUCCESS: Removed reference "%s" from parent "%s".',
+                                pathInfo.name,
+                                parent.absolutePath
+                            );
+                        }
+                });
 
-            .done((transaction : IDBTransaction) =>
-                transaction
-                    .objectStore(FileDb._FILE_STORE)
-                    .delete(absolutePath)
-                    .onsuccess = (ev) => {
-                        this._env.log('\tSUCCESS: Removed  "%s" from database "%s".', absolutePath, this.name);
-                        cb({ success: true, result: (<any> ev.target).result });
-                    }
-            );
+                async.newTask(cb => 
+                    transaction
+                        .objectStore(FileDb._FILE_STORE)
+                        .get(absolutePath)
+                        .onsuccess = (ev) => {
+                            var result = (<any> ev.target).result;
+
+                            if (typeof(result) === 'undefined') {
+                                (<any> ev.target).transaction.abort();
+                                return;
+                            }
+
+                            cb(result);
+                        }
+                ).done((itemData : IFileData) => {
+                    var item = new File(itemData);
+
+                    this._traverseWithAction(
+                        item, 
+                        (child : IFile) => {
+                            transaction
+                                .objectStore(FileDb._FILE_STORE)
+                                .delete(child.absolutePath)
+                                .onsuccess = (ev) => {
+                                    this._env.log(
+                                        '\t\tSUCCESS: Removing item "%s" from database "%s".',
+                                        child.absolutePath,
+                                        this.name
+                                    );
+                                }
+                        },
+                        transaction
+                    );
+                });
+            }
+        );
     }
 
     private _traverseWithAction(
-        root : IFile, 
-        action : (file : IFile) => any, 
+        root        : IFile, 
+        action      : (file : IFile) => void,
         transaction : IDBTransaction
     ) {
+        var childNames = Object.getOwnPropertyNames(root.children);
+
+        for(var i, child : IChildInfo; child = root.children[childNames[i]]; i++) {
+            transaction
+                .objectStore(FileDb._FILE_STORE)
+                .get(
+                    FileUtils.getAbsolutePath({ 
+                        name: child.name, 
+                        location: FileUtils.getAbsolutePath(root)
+                    })
+                ).onsuccess = (ev) => {
+                    var result : IFileData = (<any> ev.target).result;
+
+                    if (result) {
+                        var file = new File(result);
+                        this._traverseWithAction(file, action, transaction);
+                        action(file);
+                    }
+                }
+        }
+
+        action(root);
     }
 }
 
