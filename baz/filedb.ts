@@ -329,100 +329,99 @@ class FileDb implements IFileDb {
         var pathInfo = FileUtils.getPathInfo(absolutePath);
 
         this._getDb().done((db : IDBDatabase) => {
-                var transaction = db.transaction(FileDb._FILE_STORE, FileDb._READ_WRITE);
+            var transaction = db.transaction(FileDb._FILE_STORE, FileDb._READ_WRITE);
 
-                transaction.onerror = (ev) => {
-                    this._env.log('\tFAILURE: Could not remove "%s" from database "%s".', absolutePath, this.name);
-                    cb({ success: false, error: (<any> ev.target).error });
-                }
-
-                transaction.onabort = (ev) => {
-                    this._env.log(
-                        '\tFAILURE: Transaction aborted while deleting "%s" from database "%s".',
-                        absolutePath,
-                        this.name
-                    );
-                    cb({ success: false, error: (<any> ev.target).error });
-                }
-
-                transaction.oncomplete = (ev) => {
-                    this._env.log(
-                        '\tSUCCESS: Transaction for removal of "%s" from database "%s" completed.',
-                         absolutePath, 
-                         this.name
-                    );
-                    cb({ success: true, result: (<any> ev.target).result });
-                }
-
-                async.newTask(cb => 
-                    transaction
-                        .objectStore(FileDb._FILE_STORE)
-                        .get(pathInfo.location)
-                        .onsuccess = (ev) => {
-                            var result = (<any> ev.target).result;
-
-                            if (typeof(result) === 'undefined') {
-                                (<any> ev.target).transaction.abort();
-                                return;
-                            }
-
-                            cb(result);
-                        }
-                ).next((parentData : IFileData) => {
-                    var parent = new File(parentData);
-
-                    parent.removeChild(pathInfo.name);
-
-                    return cb => transaction
-                        .objectStore(FileDb._FILE_STORE)
-                        .put(parent.getStoreObject())
-                        .onsuccess = cb;
-                    }
-                ).done(() =>
-                    this._env.log(
-                        '\t\tSUCCESS: Removed reference "%s" from parent "%s".',
-                        pathInfo.name,
-                        pathInfo.location
-                    )
-                );
-
-                async.newTask(cb => 
-                    transaction
-                        .objectStore(FileDb._FILE_STORE)
-                        .get(absolutePath)
-                        .onsuccess = (ev) => {
-                            var result = (<any> ev.target).result;
-
-                            if (typeof(result) === 'undefined') {
-                                (<any> ev.target).transaction.abort();
-                                return;
-                            }
-
-                            cb(result);
-                        }
-                ).next((itemData : IFileData) => {
-                    var item = new File(itemData);
-
-                    return cb => this._traverseWithAction(
-                        item, 
-                        (child : IFile) => {
-                            transaction
-                                .objectStore(FileDb._FILE_STORE)
-                                .delete(child.absolutePath)
-                                .onsuccess = ev => cb(child);
-                        },
-                        transaction
-                    );
-                }).done((child : IFile) =>
-                    this._env.log(
-                        '\t\tSUCCESS: Removing item "%s" from database "%s".',
-                        child.absolutePath,
-                        this.name
-                    )
-                );
-                                
+            transaction.onerror = (ev) => {
+                this._env.log('\tFAILURE: Could not remove "%s" from database "%s".', absolutePath, this.name);
+                cb({ success: false, error: (<any> ev.target).error });
             }
-        );
+
+            transaction.onabort = (ev) => {
+                this._env.log(
+                    '\tFAILURE: Transaction aborted while deleting "%s" from database "%s".',
+                    absolutePath,
+                    this.name
+                );
+                cb({ success: false, error: (<any> ev.target).error });
+            }
+
+            transaction.oncomplete = (ev) => {
+                this._env.log(
+                    '\tSUCCESS: Transaction for removal of "%s" from database "%s" completed.',
+                        absolutePath, 
+                        this.name
+                );
+                cb({ success: true, result: (<any> ev.target).result });
+            }
+
+            async.newTask(cb => 
+                transaction
+                    .objectStore(FileDb._FILE_STORE)
+                    .get(pathInfo.location)
+                    .onsuccess = (ev) => {
+                        var result = (<any> ev.target).result;
+
+                        if (typeof(result) === 'undefined') {
+                            (<any> ev.target).transaction.abort();
+                            return;
+                        }
+
+                        cb(result);
+                    }
+            ).next((parentData : IFileData) => {
+                var parent = new File(parentData);
+
+                parent.removeChild(pathInfo.name);
+
+                return cb => transaction
+                    .objectStore(FileDb._FILE_STORE)
+                    .put(parent.getStoreObject())
+                    .onsuccess = cb;
+                }
+            ).done(() =>
+                this._env.log(
+                    '\t\tSUCCESS: Removed reference "%s" from parent "%s".',
+                    pathInfo.name,
+                    pathInfo.location
+                )
+            );
+
+            async.newTask(cb => 
+                transaction
+                    .objectStore(FileDb._FILE_STORE)
+                    .get(absolutePath)
+                    .onsuccess = (ev) => {
+                        var result = (<any> ev.target).result;
+
+                        if (typeof(result) === 'undefined') {
+                            (<any> ev.target).transaction.abort();
+                            return;
+                        }
+
+                        cb(result);
+                    }
+            ).next((itemData : IFileData) => {
+                var item = new File(itemData);
+
+                return cb => this._traverseWithAction(
+                    item, 
+                    (child : IFile) => {
+                        transaction
+                            .objectStore(FileDb._FILE_STORE)
+                            .delete(child.absolutePath)
+                            .onsuccess = ev => cb(child);
+                    },
+                    transaction
+                );
+            }).done((child : IFile) =>
+                this._env.log(
+                    '\t\tSUCCESS: Removing item "%s" from database "%s".',
+                    child.absolutePath,
+                    this.name
+                )
+            );
+                                
+        });
     }
 
     private _traverseWithAction(
