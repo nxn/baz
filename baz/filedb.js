@@ -203,12 +203,11 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
             var root = {
                 name: '',
                 location: '/',
-                type: 'application/vnd.baz.solution',
+                type: 'application/vnd.baz.root',
                 content: null,
-                children: {
-                }
+                children: null
             };
-            fileStore.put(new File(root)).onerror = function (ev) {
+            fileStore.put(new File(root).getStoreObject()).onerror = function (ev) {
                 _this._env.log('\tFAILURE: Could not create ROOT in database "%s".', _this.name);
             };
         };

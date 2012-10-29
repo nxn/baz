@@ -3,11 +3,61 @@ define(["require", "exports", './filedb', './async'], function(require, exports,
 
     var async = __async__;
 
-    var test = {
-        name: 'test.ts',
-        type: 'text/plain; charset=UTF-8',
+    
+    var bazSolution = {
+        name: 'baz.sln',
+        type: 'application/vnd.baz.solution',
         location: '/',
-        content: new ArrayBuffer(32),
+        content: null,
+        children: null
+    };
+    var bazProject = {
+        name: 'baz.proj',
+        type: 'application/vnd.baz.project',
+        location: '/baz.sln',
+        content: null,
+        children: null
+    };
+    var bazTS = {
+        name: 'baz.ts',
+        type: 'text/vnd.ms-typescript',
+        location: '/baz.sln/baz.proj',
+        content: null,
+        children: null
+    };
+    var bazJS = {
+        name: 'baz.js',
+        type: 'text/javascript',
+        location: '/baz.sln/baz.proj/baz.ts',
+        content: null,
+        children: null
+    };
+    var bazCSS = {
+        name: 'baz.css',
+        type: 'text/css',
+        location: '/baz.sln/baz.proj',
+        content: null,
+        children: null
+    };
+    var compilerProject = {
+        name: 'typescript-compiler.proj',
+        type: 'application/vnd.baz.project',
+        location: '/baz.sln',
+        content: null,
+        children: null
+    };
+    var tscTS = {
+        name: 'tsc.ts',
+        type: 'text/vnd.ms-typescript',
+        location: '/baz.sln/typescript-compiler.proj',
+        content: null,
+        children: null
+    };
+    var libTS = {
+        name: 'lib.d.ts',
+        type: 'text/vnd.ms-typescript',
+        location: '/baz.sln/typescript-compiler.proj',
+        content: null,
         children: null
     };
     var env = {
@@ -25,83 +75,59 @@ define(["require", "exports", './filedb', './async'], function(require, exports,
     };
     async.newTask(function (cb) {
         return cb(fs.open({
-            name: 'projectName',
+            name: 'baz',
             environment: env
         }));
-    }).next(function (fileDb) {
+    }).next(function (fs) {
         return function (cb) {
-            return fileDb.put(test, function (_) {
-                return cb(fileDb);
+            return fs.put(bazSolution, function () {
+                return cb(fs);
             });
         }
-    }).next(function (fileDb) {
+    }).next(function (fs) {
         return function (cb) {
-            return fileDb.get('/test.ts', function (_) {
-                return cb(fileDb);
+            return fs.put(bazProject, function () {
+                return cb(fs);
             });
         }
-    }).next(function (fileDb) {
+    }).next(function (fs) {
         return function (cb) {
-            return fileDb.del('/test.ts', function (_) {
-                return cb(fileDb);
+            return fs.put(bazTS, function () {
+                return cb(fs);
             });
         }
-    }).done(function (fileDb) {
-        console.log("ALL SYSTEMS ARE FUCK YES!!");
+    }).next(function (fs) {
+        return function (cb) {
+            return fs.put(bazJS, function () {
+                return cb(fs);
+            });
+        }
+    }).next(function (fs) {
+        return function (cb) {
+            return fs.put(bazCSS, function () {
+                return cb(fs);
+            });
+        }
+    }).next(function (fs) {
+        return function (cb) {
+            return fs.put(compilerProject, function () {
+                return cb(fs);
+            });
+        }
+    }).next(function (fs) {
+        return function (cb) {
+            return fs.put(tscTS, function () {
+                return cb(fs);
+            });
+        }
+    }).next(function (fs) {
+        return function (cb) {
+            return fs.put(libTS, function () {
+                return cb(fs);
+            });
+        }
+    }).done(function () {
+        return env.log("Finished importing mock data");
     });
-    var solution = [
-        {
-            name: "Editor Interface",
-            type: 'project',
-            contents: [
-                {
-                    name: "Tree-View",
-                    type: 'directory',
-                    contents: [
-                        {
-                            name: 'file1',
-                            type: 'file'
-                        }, 
-                        {
-                            name: 'file2',
-                            type: 'file'
-                        }
-                    ]
-                }, 
-                {
-                    name: "file3",
-                    type: 'file'
-                }
-            ]
-        }, 
-        {
-            name: "TypeScript Compiler",
-            type: 'project',
-            contents: [
-                {
-                    name: "file4",
-                    type: 'file'
-                }, 
-                {
-                    name: "file5",
-                    type: 'file'
-                }
-            ]
-        }, 
-        {
-            name: 'Resources',
-            type: 'directory',
-            contents: [
-                {
-                    name: 'file6',
-                    type: 'file'
-                }, 
-                {
-                    name: 'file7',
-                    type: 'file'
-                }
-            ]
-        }
-    ];
 })
 

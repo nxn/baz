@@ -218,12 +218,12 @@ class FileDb implements IFileDb {
         var root : IFileData = {
             name        : '',
             location    : '/',
-            type        : 'application/vnd.baz.solution',
+            type        : 'application/vnd.baz.root',
             content     : null,
-            children    : { }
+            children    : null
         }
 
-        fileStore.put(new File(root))
+        fileStore.put(new File(root).getStoreObject())
             .onerror = (ev) => {
                 this._env.log('\tFAILURE: Could not create ROOT in database "%s".', this.name)
             };
