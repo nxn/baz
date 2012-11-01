@@ -8,6 +8,7 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
             this._db = db;
             this._env = environment;
             this._file = file;
+            this._$parent = $parent;
             this.id = utils.Guid.make();
             this.nodes = [];
             this.render();
@@ -17,32 +18,34 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
         };
         FSTreeNode.prototype.render = function () {
             if(!this._$this) {
-                this._$this = this._$parent.append('<div/>');
-                this._$this.addClass(this._getMimeClass());
+                this._$this = $('<div/>').appendTo(this._$parent).addClass('node');
             }
-            var $toggleWrapper = this._$this.append('<div/>').addClass('toggle-content-view');
-            var $toggleButton = $toggleWrapper.append('<div/>').addClass('btn');
-            var $icon = this._$this.append('<div/>').addClass('icon');
-            var $name = this._$this.append('<div/>').addClass('name').text(this._file.name);
-            var $actions = this._$this.append('<div/>').addClass('actions');
-            var $add = $actions.append('<div/>').addClass('add');
-            var $remove = $actions.append('<div/>').addClass('remove');
-            var $contents = this._$this.append('<div/>').addClass('content');
+            var $file = $('<div/>').appendTo(this._$this).addClass(this._getMimeClass());
+            var $toggleWrapper = $('<div/>').appendTo($file).addClass('toggle-content-view');
+            var $toggleButton = $('<div/>').appendTo($file).addClass('btn');
+            var $icon = $('<div/>').appendTo($file).addClass('icon');
+            var $name = $('<div/>').appendTo($file).addClass('name').text(this._file.name);
+            var $actions = $('<div/>').appendTo($file).addClass('actions');
+            var $add = $('<div/>').appendTo($actions).addClass('add');
+            var $remove = $('<div/>').appendTo($actions).addClass('remove');
+            var $contents = $('<div/>').appendTo(this._$this).addClass('content');
         };
         FSTreeNode.prototype.open = function () {
             var _this = this;
-            async.newTask(function (cb) {
-                return _this._db.get(_this._file.location + _this._file.name, cb);
-            }).done(function (response) {
-                if(response.success) {
-                    for(var i = 0, fileInfo; fileInfo = response.result[i]; i++) {
-                        var node = new FSTreeNode(fileInfo, _this._$this.children('.content'), _this._db, _this._env);
-                        _this.nodes.push(node);
+            this._file.forEachChild(function (child) {
+                async.newTask(function (cb) {
+                    return _this._db.get(_this._db.utils.getAbsolutePath({
+                        name: child.name,
+                        location: _this._file.absolutePath
+                    }), cb);
+                }).done(function (response) {
+                    if(!response.success) {
+                        _this._env.log('FAILURE: Could not open child of "%s".', _this._file.absolutePath);
                     }
+                    var node = new FSTreeNode(response.result, _this._$this.children('.content'), _this._db, _this._env);
+                    _this.nodes.push(node);
                     _this._$this.addClass('open');
-                } else {
-                    _this._env.log("Failed to open FS root (tree-view.ts:FSTreeView:constructor)");
-                }
+                });
             });
         };
         FSTreeNode.prototype.close = function () {
@@ -68,11 +71,10 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
                 return $(cb);
             }).done(function (dbResponseArgs, domReadyArgs) {
                 var response = dbResponseArgs[0];
-                if(response.success) {
-                    _this._root = new FSTreeNode(response.result, $(_this._parentSel), _this._db, _this._env);
-                } else {
+                if(!response.success) {
                     _this._env.log("Failed to open FS root (tree-view.ts:FSTreeView:constructor)");
                 }
+                _this._root = new FSTreeNode(response.result, $(_this._parentSel), _this._db, _this._env);
                 _this._root.open();
             });
         }

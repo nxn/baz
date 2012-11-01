@@ -86,11 +86,11 @@ async.newTask(cb => cb(fs.open({ name: 'baz', environment: env })))
     .next((fs : IFileDb) => cb => fs.put(compilerProject,   () => cb(fs)))
     .next((fs : IFileDb) => cb => fs.put(tscTS,             () => cb(fs)))
     .next((fs : IFileDb) => cb => fs.put(libTS,             () => cb(fs)))
-    .done(() => env.log("Finished importing mock data"));
-
-
-
-
+    .done((fs : IFileDb) => new ui.FSTreeView({
+        db          : fs,
+        environment : env,
+        parentSel   : '#solution-explorer'
+    }));
 
 
 

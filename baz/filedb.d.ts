@@ -3,13 +3,13 @@ interface IChildInfo {
     type : string;
 }
 
+interface IChildInfoDictionary {
+    [filename : string] : IChildInfo;
+}
+
 interface IPathInfo {
     name        : string;
     location    : string;
-}
-
-interface IChildInfoDictionary {
-    [ filename : string ] : IChildInfo;
 }
 
 interface IFileInfo extends IChildInfo {
@@ -27,6 +27,7 @@ interface IFileStoreObject extends IFileData {
 
 interface IFile extends IFileStoreObject {
     size                : number;
+    forEachChild(fn : (child : IChildInfo) => any) : void;
 }
 
 interface IFileDbConfig {

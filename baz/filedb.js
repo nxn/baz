@@ -21,6 +21,12 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
         File.prototype.removeChild = function (filename) {
             delete this.children[filename];
         };
+        File.prototype.forEachChild = function (fn) {
+            var names = Object.getOwnPropertyNames(this.children);
+            for(var i = 0, child; child = this.children[names[i]]; i++) {
+                fn(child);
+            }
+        };
         File.prototype.getInfoObject = function () {
             return {
                 name: this.name,
@@ -70,8 +76,8 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
         Object.defineProperty(File.prototype, "size", {
             get: function () {
                 var files = Object.getOwnPropertyNames(this.children);
-                for(var i = 0, file; file = this.children[files[i]]; i++) {
-                }
+                this.forEachChild(function (c) {
+                });
                 if(this.content instanceof ArrayBuffer) {
                     return (this.content).byteLength;
                 }
@@ -88,7 +94,8 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
             configurable: true
         });
         return File;
-    })();    
+    })();
+    exports.File = File;    
     var FileUtils;
     (function (FileUtils) {
         var rxRepeatingSlash = /\/{2,}/g;
@@ -356,20 +363,19 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
         };
         FileDb.prototype._traverseWithAction = function (root, action, transaction) {
             var _this = this;
-            var childNames = Object.getOwnPropertyNames(root.children);
-            for(var i, child; child = root.children[childNames[i]]; i++) {
-                transaction.objectStore(FileDb._FILE_STORE).get(FileUtils.getAbsolutePath({
-                    name: child.name,
+            root.forEachChild(function (c) {
+                return transaction.objectStore(FileDb._FILE_STORE).get(FileUtils.getAbsolutePath({
+                    name: c.name,
                     location: FileUtils.getAbsolutePath(root)
-                })).onsuccess = function (ev) {
+                })).onsuccess = (function (ev) {
                     var result = (ev.target).result;
                     if(result) {
                         var file = new File(result);
                         _this._traverseWithAction(file, action, transaction);
                         action(file);
                     }
-                };
-            }
+                });
+            });
             action(root);
         };
         return FileDb;

@@ -53,20 +53,24 @@ body
 }
 
 #logo
-{ font-family: 'AmaranthRegular'
+{ /*font-family: 'AmaranthRegular'*/
+; font-family: HammersmithOne
 ; font-size: 1.0em
 ; line-height: 20px
 ; position: absolute
 ; right: 10px
 }
 #logo .color-2
-{ color: #8d4fb8
+{ color: #804ced
 }
 #logo .color-1
 { color: #68c4ff
 }
 #logo .color-3
 { color: #efefef
+}
+#logo .color-0
+{ color: #3a9df6
 }
 
 
@@ -123,7 +127,8 @@ body
 ; border-top: 5px solid #3a9df6
 }
 #main-panel .tabs
-{ overflow: hidden
+{ overflow: visible
+; height: 20px
 ; border-right: 1px solid #ddd
 ; background: #efefef
 ; background: -webkit-gradient(linear, 0% 0%, 0% 100%, from(#efefef), to(#fafafa))
@@ -132,21 +137,39 @@ body
 ; background: -ms-linear-gradient(top, #fafafa, #efefef)
 ; background: -o-linear-gradient(top, #fafafa, #efefef)
 }
-#main-panel .tabs div
+#main-panel .tabs > div
 { float: left
-; height: 20px
-; line-height: 20px
+}
+#main-panel .tabs > div > div
+{ line-height: 20px
 ; padding: 0px 10px
+; height: 20px
 ; color: #222
 }
-
+#main-panel .tabs div.modified
+{ border-top: 5px solid #ffe330 !important
+; margin-top: -5px
+}
+#main-panel .tabs div.error
+{ border-top: 5px solid #ff0033 !important
+; margin-top: -5px
+}
+#main-panel .tabs div.active
+{ background-color: #68c4ff
+; background: -webkit-gradient(linear, 0% 0%, 0% 100%, from(#3e8cd1), to(#3a9df6))
+; background: -webkit-linear-gradient(top, #3a9df6, #3e8cd1)
+; background: -moz-linear-gradient(top, #3a9df6, #3e8cd1)
+; background: -ms-linear-gradient(top, #3a9df6, #3e8cd1)
+; background: -o-linear-gradient(top, #3a9df6, #3e8cd1)
+; color: #fff
+; border-color: #3a9df6 !important
+}
 #tab-start .icon
 { background-image: url(img/iconSweets2/16/dark/Misc/16-Home.png)
 ; background-repeat: no-repeat
 ; background-position: 50% 50%
 ; width: 16px
 ; height: 20px
-; padding: 0px !important
 }
 #main-panel .tabs .more
 { padding: 0px !important
@@ -164,7 +187,8 @@ body
 #main-panel .tabs .more:hover .icon
 { background-image: url(img/iconSweets2/16/dark/Arrows/16-Bended-Arrow-Down.png)
 }
-#main-panel .tabs > div:hover
+  #main-panel .tabs > div.hover
+, #main-panel .tabs > div:hover
 { background-color: #fafafa
 ; background: -webkit-gradient(linear, 0% 0%, 0% 100%, from(#fafafa), to(#ffffff))
 ; background: -webkit-linear-gradient(top, #ffffff, #fafafa)
@@ -173,15 +197,12 @@ body
 ; background: -o-linear-gradient(top, #ffffff, #fafafa)
 ; color: #8d4fb8
 }
-#main-panel .tabs div.active
-{ background-color: #68c4ff
-; background: -webkit-gradient(linear, 0% 0%, 0% 100%, from(#3e8cd1), to(#3a9df6))
-; background: -webkit-linear-gradient(top, #3a9df6, #3e8cd1)
-; background: -moz-linear-gradient(top, #3a9df6, #3e8cd1)
-; background: -ms-linear-gradient(top, #3a9df6, #3e8cd1)
-; background: -o-linear-gradient(top, #3a9df6, #3e8cd1)
-; color: #fff
+  #main-panel .tabs > div.hover > div
+, #main-panel .tabs > div > div:hover
+{ border-top: 5px solid #68c4ff
+; margin-top: -5px
 }
+
 #content-area div.editor
 { cursor: text !important
 }
@@ -411,7 +432,7 @@ body
 ; height: 20px
 ; line-height: 20px
 ; padding: 0px
-; overflow: hidden
+; overflow: visible
 }
 
 #right-panel ul.menu li
@@ -435,6 +456,10 @@ body
 ; background: -ms-linear-gradient(top, #ffffff, #fafafa)
 ; background: -o-linear-gradient(top, #ffffff, #fafafa)
 }
+#right-panel ul.menu li:hover .icon
+{ border-top: 5px solid #cc30ff
+; margin-top: -5px
+}
 #right-panel ul.menu li.active
 { background-color: #8d4fb8/*c675ff*/
 ; background: -webkit-gradient(linear, 0% 0%, 0% 100%, from(#7145bc), to(#804ced))
@@ -442,6 +467,9 @@ body
 ; background: -moz-linear-gradient(top, #804ced, #7145bc)
 ; background: -ms-linear-gradient(top, #804ced, #7145bc)
 ; background: -o-linear-gradient(top, #804ced, #7145bc)
+}
+#right-panel ul.menu li.active:hover .icon
+{ border-color: #804ced !important
 }
 #right-panel ul.menu li .icon
 { height: 20px

@@ -1,9 +1,10 @@
-define(["require", "exports", './filedb', './async'], function(require, exports, __fs__, __async__) {
+define(["require", "exports", './filedb', './async', './tree-view'], function(require, exports, __fs__, __async__, __ui__) {
     var fs = __fs__;
 
     var async = __async__;
 
-    
+    var ui = __ui__;
+
     var bazSolution = {
         name: 'baz.sln',
         type: 'application/vnd.baz.solution',
@@ -126,8 +127,12 @@ define(["require", "exports", './filedb', './async'], function(require, exports,
                 return cb(fs);
             });
         }
-    }).done(function () {
-        return env.log("Finished importing mock data");
+    }).done(function (fs) {
+        return new ui.FSTreeView({
+            db: fs,
+            environment: env,
+            parentSel: '#solution-explorer'
+        });
     });
 })
 

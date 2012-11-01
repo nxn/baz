@@ -29,6 +29,14 @@ class File implements IFile {
         delete this.children[filename];
     }
 
+    forEachChild(fn : (child : IChildInfo) => any) : void {
+        var names = Object.getOwnPropertyNames(this.children);
+
+        for (var i = 0, child; child = this.children[names[i]]; i++) {
+            fn(child);
+        }
+    }
+
     getInfoObject() : IFileInfo {
         return {
             name        : this.name,
@@ -80,9 +88,9 @@ class File implements IFile {
 
     get size() {
         var files = Object.getOwnPropertyNames(this.children);
-        for (var i = 0, file : IChildInfo; file = this.children[files[i]]; i++) {
-            // TODO: recursively sum sub sizes
-        }
+        this.forEachChild(c => {
+            // TODO: recursively sum sizes
+        });
 
         if (this.content instanceof ArrayBuffer) {
             return (<ArrayBuffer> this.content).byteLength;
@@ -429,17 +437,15 @@ class FileDb implements IFileDb {
         action      : (file : IFile) => void,
         transaction : IDBTransaction
     ) {
-        var childNames = Object.getOwnPropertyNames(root.children);
-
-        for(var i, child : IChildInfo; child = root.children[childNames[i]]; i++) {
+        root.forEachChild(c => 
             transaction
                 .objectStore(FileDb._FILE_STORE)
                 .get(
                     FileUtils.getAbsolutePath({ 
-                        name: child.name, 
+                        name: c.name, 
                         location: FileUtils.getAbsolutePath(root)
                     })
-                ).onsuccess = (ev) => {
+                ).onsuccess = (ev => {
                     var result : IFileData = (<any> ev.target).result;
 
                     if (result) {
@@ -447,8 +453,8 @@ class FileDb implements IFileDb {
                         this._traverseWithAction(file, action, transaction);
                         action(file);
                     }
-                }
-        }
+                })
+        );
 
         action(root);
     }
