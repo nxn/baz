@@ -5,13 +5,15 @@ interface IFSTreeConfig {
     db              : IFileDb;
     environment     : IEnvironment;
     parentSel       : string;
+    path            : string;
 }
 
 interface IFSTreeNode {
     id          : string;
     nodes       : IFSTreeNode[];
+    isOpen      : bool;
 
-    render()    : void;
+    toggle()    : void;
     open()      : void;
     close()     : void;
 }

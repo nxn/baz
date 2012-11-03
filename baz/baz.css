@@ -273,14 +273,65 @@ body
 ; overflow-y: scroll
 }
 
-#solution-explorer > div
+#solution-explorer .node .item
 { overflow: hidden
 ; height: 20px
 ; line-height: 20px
 }
-/*#solution-explorer > div:nth-child(even)
+#solution-explorer .node .item > div
+{ float: left
+;
+}
+  #solution-explorer .node .item .toggle-content-view .btn
+, #solution-explorer .node .item .icon
+{ width: 20px
+; height: 20px
+}
+#solution-explorer .item .toggle-content-view .btn
+{ background-image: url(img/closed.png)
+; background-repeat: no-repeat
+; background-position: 50% 50%
+}
+#solution-explorer .item .toggle-content-view .btn:hover
+{ background-image: url(img/closed-hover.png)
+}
+#solution-explorer .open > .item > .toggle-content-view > .btn
+{ background-image: url(img/open.png)
+}
+#solution-explorer .open > .item > .toggle-content-view > .btn:hover
+{ background-image: url(img/open-hover.png)
+}
+
+#solution-explorer .item .icon
+{ background-image: url(img/iconSweets2/16/dark/Files/16-Document.png)
+; background-repeat: no-repeat
+; background-position: 50% 50%
+}
+#solution-explorer .application-vnd-baz-solution .icon
+{ background-image: url(img/iconSweets2/16/dark/Misc/16-File-Cabinet.png)
+}
+#solution-explorer .application-vnd-baz-project .icon
+{ background-image: url(img/iconSweets2/16/dark/Misc/16-Archive.png)
+}
+#solution-explorer .application-vnd-baz-directory .icon
+{ background-image: url(img/iconSweets2/16/dark/Misc/16-Folder.png)
+}
+#solution-explorer .item .name
+{ padding-left: 5px
+}
+
+#solution-explorer .node .content
+{ padding-left: 20px
+}
+
+/*#solution-explorer > div
+{ overflow: hidden
+; height: 20px
+; line-height: 20px
+}
+#solution-explorer > div:nth-child(even)
 { background-color: #f4f4f4
-}*/
+}
 #solution-explorer > div:hover
 { background-color: #fafafa
 }
@@ -310,32 +361,10 @@ body
 { float: left
 ; width: 16px
 ; height: 20px
-; margin-right: 5px
-; background-repeat: no-repeat
-; background-position: 50% 50%
+
 }
-/*#solution-explorer .solution
-{ padding-top: 5px
-; padding-bottom: 5px
-; font-size: 1.2em
-; font-family: 'Segoe UI light'
-}
-#solution-explorer .solution .icon
-{ margin-right: 10px
-}
-    */
-#solution-explorer .solution .icon
-{ background-image: url(img/iconSweets2/16/dark/Misc/16-File-Cabinet.png)
-}
-#solution-explorer .project .icon
-{ background-image: url(img/iconSweets2/16/dark/Misc/16-Archive.png)
-}
-#solution-explorer .file .icon
-{ background-image: url(img/iconSweets2/16/dark/Files/16-Document.png)
-}
-#solution-explorer .directory .icon
-{ background-image: url(img/iconSweets2/16/dark/Misc/16-Folder.png)
-}
+
+
 
 #solution-explorer .actions 
 { float: right
@@ -373,7 +402,7 @@ body
 }
 #solution-explorer .solution .actions .remove
 { display: none
-}
+}*/
 
 
 

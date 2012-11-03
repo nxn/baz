@@ -9,6 +9,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
             this.content = fileData.content;
             this.children = fileData.children || {
             };
+            this.childCount = Object.getOwnPropertyNames(this.children).length;
         }
         File._rxRepeatingSlash = /\/{2,}/g;
         File._rxTrailingSlash = /(.+?)(?:\/*)$/;
@@ -94,8 +95,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
             configurable: true
         });
         return File;
-    })();
-    exports.File = File;    
+    })();    
     var FileUtils;
     (function (FileUtils) {
         var rxRepeatingSlash = /\/{2,}/g;

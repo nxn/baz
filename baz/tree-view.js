@@ -11,18 +11,24 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
             this._$parent = $parent;
             this.id = utils.Guid.make();
             this.nodes = [];
-            this.render();
+            this.isOpen = false;
+            this._render();
         }
         FSTreeNode.prototype._getMimeClass = function () {
             return this._file.type.replace(/[\.\/]/g, '-');
         };
-        FSTreeNode.prototype.render = function () {
+        FSTreeNode.prototype._render = function () {
+            var _this = this;
             if(!this._$this) {
                 this._$this = $('<div/>').appendTo(this._$parent).addClass('node');
             }
-            var $file = $('<div/>').appendTo(this._$this).addClass(this._getMimeClass());
+            var $file = $('<div/>').appendTo(this._$this).addClass(this._getMimeClass() + " item");
             var $toggleWrapper = $('<div/>').appendTo($file).addClass('toggle-content-view');
-            var $toggleButton = $('<div/>').appendTo($file).addClass('btn');
+            if(this._file.childCount > 0) {
+                $('<div/>').appendTo($toggleWrapper).addClass('btn').click(function (_) {
+                    return _this.toggle();
+                });
+            }
             var $icon = $('<div/>').appendTo($file).addClass('icon');
             var $name = $('<div/>').appendTo($file).addClass('name').text(this._file.name);
             var $actions = $('<div/>').appendTo($file).addClass('actions');
@@ -30,8 +36,21 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
             var $remove = $('<div/>').appendTo($actions).addClass('remove');
             var $contents = $('<div/>').appendTo(this._$this).addClass('content');
         };
+        FSTreeNode.prototype.toggle = function () {
+            if(this.isOpen) {
+                this.close();
+            } else {
+                this.open();
+            }
+        };
+        FSTreeNode.prototype.close = function () {
+            this._$this.children('.content').empty();
+            this._$this.removeClass('open');
+            this.isOpen = false;
+        };
         FSTreeNode.prototype.open = function () {
             var _this = this;
+            this._$this.children('.content').empty();
             this._file.forEachChild(function (child) {
                 async.newTask(function (cb) {
                     return _this._db.get(_this._db.utils.getAbsolutePath({
@@ -45,12 +64,9 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
                     var node = new FSTreeNode(response.result, _this._$this.children('.content'), _this._db, _this._env);
                     _this.nodes.push(node);
                     _this._$this.addClass('open');
+                    _this.isOpen = true;
                 });
             });
-        };
-        FSTreeNode.prototype.close = function () {
-            this._$this.children().remove();
-            this._$this.removeClass('open');
         };
         return FSTreeNode;
     })();    
@@ -62,11 +78,12 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
         function FSTreeView(config) {
             var _this = this;
             this._db = config.db;
+            this._path = config.path || '/';
             this._env = config.environment || FSTreeView._DEFAULT_ENV;
             this._parentSel = config.parentSel;
             this._bg = new FSTreeViewBGLayer();
             async.newTask(function (cb) {
-                return _this._db.get('/', cb);
+                return _this._db.get(_this._path, cb);
             }, function (cb) {
                 return $(cb);
             }).done(function (dbResponseArgs, domReadyArgs) {

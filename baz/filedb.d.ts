@@ -26,7 +26,8 @@ interface IFileStoreObject extends IFileData {
 }
 
 interface IFile extends IFileStoreObject {
-    size                : number;
+    size            : number;
+    childCount      : number;
     forEachChild(fn : (child : IChildInfo) => any) : void;
 }
 

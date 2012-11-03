@@ -12,6 +12,7 @@ class File implements IFile {
     type        : string;
     content     : any;
     children    : IChildInfoDictionary;
+    childCount  : number;
 
     constructor(fileData : IFileData) {
         this.name       = fileData.name;
@@ -19,6 +20,8 @@ class File implements IFile {
         this.type       = fileData.type;
         this.content    = fileData.content;
         this.children   = fileData.children || { };
+
+        this.childCount = Object.getOwnPropertyNames(this.children).length;
     }
 
     addChild(file : IChildInfo) {

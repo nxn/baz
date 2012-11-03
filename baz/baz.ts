@@ -11,7 +11,7 @@ var bazSolution : IFileData = {
 }
 
 var bazProject : IFileData = {
-    name: 'baz.proj',
+    name: 'baz.tsp',
     type: 'application/vnd.baz.project',
     location : '/baz.sln',
     content: null,
@@ -21,7 +21,7 @@ var bazProject : IFileData = {
 var bazTS : IFileData = {
     name: 'baz.ts',
     type: 'text/vnd.ms-typescript',
-    location: '/baz.sln/baz.proj',
+    location: '/baz.sln/baz.tsp',
     content: null,
     children: null
 }
@@ -37,13 +37,13 @@ var bazJS : IFileData = {
 var bazCSS : IFileData = {
     name: 'baz.css',
     type: 'text/css',
-    location: '/baz.sln/baz.proj',
+    location: '/baz.sln/baz.tsp',
     content: null,
     children: null
 }
 
 var compilerProject : IFileData = {
-    name: 'typescript-compiler.proj',
+    name: 'typescript-compiler.tsp',
     type: 'application/vnd.baz.project',
     location: '/baz.sln',
     content: null,
@@ -53,7 +53,7 @@ var compilerProject : IFileData = {
 var tscTS : IFileData = {
     name: 'tsc.ts',
     type: 'text/vnd.ms-typescript',
-    location: '/baz.sln/typescript-compiler.proj',
+    location: '/baz.sln/typescript-compiler.tsp',
     content: null,
     children: null
 }
@@ -62,7 +62,7 @@ var tscTS : IFileData = {
 var libTS : IFileData = {
     name: 'lib.d.ts',
     type: 'text/vnd.ms-typescript',
-    location: '/baz.sln/typescript-compiler.proj',
+    location: '/baz.sln/typescript-compiler.tsp',
     content: null,
     children: null
 }
@@ -89,6 +89,7 @@ async.newTask(cb => cb(fs.open({ name: 'baz', environment: env })))
     .done((fs : IFileDb) => new ui.FSTreeView({
         db          : fs,
         environment : env,
+        path        : '/baz.sln',
         parentSel   : '#solution-explorer'
     }));
 

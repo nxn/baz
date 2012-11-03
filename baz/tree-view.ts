@@ -7,6 +7,7 @@ import utils = module("./utils");
 class FSTreeNode implements IFSTreeNode {
     id                  : string;
     nodes               : FSTreeNode[];
+    isOpen              : bool;
 
     private _db         : IFileDb;
     private _env        : IEnvironment;
@@ -26,23 +27,27 @@ class FSTreeNode implements IFSTreeNode {
         this._$parent   = $parent;
         this.id         = utils.Guid.make();
         this.nodes      = [];
+        this.isOpen     = false;
 
-        this.render();
+        this._render();
     }
 
     private _getMimeClass() {
         return this._file.type.replace(/[\.\/]/g, '-');
     }
 
-    render() {
+    private _render() {
         if (!this._$this) {
             this._$this = $('<div/>').appendTo(this._$parent).addClass('node');
         }
 
-        var $file           = $('<div/>').appendTo(this._$this).addClass(this._getMimeClass());
+        var $file           = $('<div/>').appendTo(this._$this).addClass(this._getMimeClass() + " item");
 
         var $toggleWrapper  = $('<div/>').appendTo($file).addClass('toggle-content-view');
-        var $toggleButton   = $('<div/>').appendTo($file).addClass('btn');
+
+        if (this._file.childCount > 0) {
+            $('<div/>').appendTo($toggleWrapper).addClass('btn').click( _ => this.toggle() );
+        }
 
         var $icon           = $('<div/>').appendTo($file).addClass('icon');
         var $name           = $('<div/>').appendTo($file).addClass('name').text(this._file.name);
@@ -54,7 +59,20 @@ class FSTreeNode implements IFSTreeNode {
         var $contents       = $('<div/>').appendTo(this._$this).addClass('content');
     }
 
+    toggle() {
+        if (this.isOpen)    this.close();
+        else                this.open();
+    }
+
+    close() {
+        this._$this.children('.content').empty();
+        this._$this.removeClass('open');
+        this.isOpen = false;
+    }
+
     open() {
+        this._$this.children('.content').empty();
+
         this._file.forEachChild((child : IChildInfo) => {
             async.newTask(cb =>
                 this._db.get(
@@ -69,6 +87,8 @@ class FSTreeNode implements IFSTreeNode {
                     this._env.log('FAILURE: Could not open child of "%s".', this._file.absolutePath);
                 }
 
+                //this._$this.children('.content').children().remove();
+
                 var node = new FSTreeNode(
                     response.result, 
                     this._$this.children('.content'), 
@@ -78,49 +98,9 @@ class FSTreeNode implements IFSTreeNode {
 
                 this.nodes.push(node);
                 this._$this.addClass('open');
+                this.isOpen = true;
             });
         });
-
-
-
-
-
-        //async
-        //    .newTask(cb => 
-        //        this._db.get(
-        //            this._db.utils.getAbsolutePath({
-        //                name    : this._file.name, 
-        //                location: '' 
-        //            }),
-        //            cb
-        //        )
-        //    )
-        //    .done((response : IResponse) => {
-        //        if (response.success) {
-        //            for (var i = 0, fileInfo : IFileInfo; fileInfo = response.result[i]; i++) {
-        //                var node = new FSTreeNode(
-        //                    fileInfo,
-        //                    this._$this.children('.content'),
-        //                    this._db, 
-        //                    this._env
-        //                )
-
-        //                this.nodes.push(node);
-        //            }
-        //            this._$this.addClass('open');
-        //        }
-        //        else {
-        //            this._env.log(
-        //                "Failed to open FS root (tree-view.ts:FSTreeView:constructor)"
-        //            );
-        //        }
-        //    }
-        //);
-    }
-
-    close() {
-        this._$this.children().remove();
-        this._$this.removeClass('open');
     }
 }
 
@@ -133,18 +113,20 @@ export class FSTreeView {
     private _db         : IFileDb;
     private _env        : IEnvironment;
     private _root       : IFSTreeNode;
+    private _path       : string;
     private _bg         : IFSTreeViewBGLayer;
     private _parentSel  : string;
 
     constructor(config : IFSTreeConfig) {
         this._db            = config.db;
-        this._env           = config.environment  || FSTreeView._DEFAULT_ENV;
+        this._path          = config.path           || '/';
+        this._env           = config.environment    || FSTreeView._DEFAULT_ENV;
         this._parentSel     = config.parentSel;
         this._bg            = new FSTreeViewBGLayer();
 
         async
             .newTask(
-                cb => this._db.get('/', cb),
+                cb => this._db.get(this._path, cb),
                 cb => $(cb)
             )
             .done((dbResponseArgs, domReadyArgs) => {

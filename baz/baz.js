@@ -13,7 +13,7 @@ define(["require", "exports", './filedb', './async', './tree-view'], function(re
         children: null
     };
     var bazProject = {
-        name: 'baz.proj',
+        name: 'baz.tsp',
         type: 'application/vnd.baz.project',
         location: '/baz.sln',
         content: null,
@@ -22,7 +22,7 @@ define(["require", "exports", './filedb', './async', './tree-view'], function(re
     var bazTS = {
         name: 'baz.ts',
         type: 'text/vnd.ms-typescript',
-        location: '/baz.sln/baz.proj',
+        location: '/baz.sln/baz.tsp',
         content: null,
         children: null
     };
@@ -36,12 +36,12 @@ define(["require", "exports", './filedb', './async', './tree-view'], function(re
     var bazCSS = {
         name: 'baz.css',
         type: 'text/css',
-        location: '/baz.sln/baz.proj',
+        location: '/baz.sln/baz.tsp',
         content: null,
         children: null
     };
     var compilerProject = {
-        name: 'typescript-compiler.proj',
+        name: 'typescript-compiler.tsp',
         type: 'application/vnd.baz.project',
         location: '/baz.sln',
         content: null,
@@ -50,14 +50,14 @@ define(["require", "exports", './filedb', './async', './tree-view'], function(re
     var tscTS = {
         name: 'tsc.ts',
         type: 'text/vnd.ms-typescript',
-        location: '/baz.sln/typescript-compiler.proj',
+        location: '/baz.sln/typescript-compiler.tsp',
         content: null,
         children: null
     };
     var libTS = {
         name: 'lib.d.ts',
         type: 'text/vnd.ms-typescript',
-        location: '/baz.sln/typescript-compiler.proj',
+        location: '/baz.sln/typescript-compiler.tsp',
         content: null,
         children: null
     };
@@ -131,6 +131,7 @@ define(["require", "exports", './filedb', './async', './tree-view'], function(re
         return new ui.FSTreeView({
             db: fs,
             environment: env,
+            path: '/baz.sln',
             parentSel: '#solution-explorer'
         });
     });
