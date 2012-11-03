@@ -13,6 +13,7 @@ interface IFSTreeNode {
     nodes       : IFSTreeNode[];
     isOpen      : bool;
 
+    render()    : void;
     toggle()    : void;
     open()      : void;
     close()     : void;

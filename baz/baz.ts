@@ -42,6 +42,22 @@ var bazCSS : IFileData = {
     children: null
 }
 
+var aceDir : IFileData = {
+    name: 'ace',
+    type: 'application/vnd.baz.directory',
+    location: '/baz.sln/baz.tsp',
+    content: null,
+    children: null
+}
+
+var aceJS : IFileData = {
+    name: 'ace.js',
+    type: 'text/javascript',
+    location: '/baz.sln/baz.tsp/ace',
+    content: null,
+    children: null
+}
+
 var compilerProject : IFileData = {
     name: 'typescript-compiler.tsp',
     type: 'application/vnd.baz.project',
@@ -83,6 +99,8 @@ async.newTask(cb => cb(fs.open({ name: 'baz', environment: env })))
     .next((fs : IFileDb) => cb => fs.put(bazTS,             () => cb(fs)))
     .next((fs : IFileDb) => cb => fs.put(bazJS,             () => cb(fs)))
     .next((fs : IFileDb) => cb => fs.put(bazCSS,            () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.put(aceDir,            () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.put(aceJS,             () => cb(fs)))
     .next((fs : IFileDb) => cb => fs.put(compilerProject,   () => cb(fs)))
     .next((fs : IFileDb) => cb => fs.put(tscTS,             () => cb(fs)))
     .next((fs : IFileDb) => cb => fs.put(libTS,             () => cb(fs)))

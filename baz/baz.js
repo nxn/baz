@@ -40,6 +40,20 @@ define(["require", "exports", './filedb', './async', './tree-view'], function(re
         content: null,
         children: null
     };
+    var aceDir = {
+        name: 'ace',
+        type: 'application/vnd.baz.directory',
+        location: '/baz.sln/baz.tsp',
+        content: null,
+        children: null
+    };
+    var aceJS = {
+        name: 'ace.js',
+        type: 'text/javascript',
+        location: '/baz.sln/baz.tsp/ace',
+        content: null,
+        children: null
+    };
     var compilerProject = {
         name: 'typescript-compiler.tsp',
         type: 'application/vnd.baz.project',
@@ -106,6 +120,18 @@ define(["require", "exports", './filedb', './async', './tree-view'], function(re
     }).next(function (fs) {
         return function (cb) {
             return fs.put(bazCSS, function () {
+                return cb(fs);
+            });
+        }
+    }).next(function (fs) {
+        return function (cb) {
+            return fs.put(aceDir, function () {
+                return cb(fs);
+            });
+        }
+    }).next(function (fs) {
+        return function (cb) {
+            return fs.put(aceJS, function () {
                 return cb(fs);
             });
         }

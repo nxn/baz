@@ -15,6 +15,15 @@ class FSTreeNode implements IFSTreeNode {
     private _$this      : JQuery;
     private _$parent    : JQuery;
 
+    private static _TYPE_ORDER : { [type : string] : number; } = 
+        (function() {
+            var order = {};
+            order["application/vnd.baz.solution"]   = 1;
+            order["application/vnd.baz.project"]    = 2;
+            order["applicatoin/vnd.baz.directory"]  = 3;
+            return order;
+        })();
+
     constructor(
         file                : IFile,
         $parent             : JQuery,
@@ -29,14 +38,14 @@ class FSTreeNode implements IFSTreeNode {
         this.nodes      = [];
         this.isOpen     = false;
 
-        this._render();
+        //this._render();
     }
 
     private _getMimeClass() {
         return this._file.type.replace(/[\.\/]/g, '-');
     }
 
-    private _render() {
+    render() {
         if (!this._$this) {
             this._$this = $('<div/>').appendTo(this._$parent).addClass('node');
         }
@@ -73,34 +82,97 @@ class FSTreeNode implements IFSTreeNode {
     open() {
         this._$this.children('.content').empty();
 
+        var i = 0, asyncOps = new Array(this._file.childCount);
+
         this._file.forEachChild((child : IChildInfo) => {
-            async.newTask(cb =>
+            asyncOps[i++] = (cb =>
                 this._db.get(
                     this._db.utils.getAbsolutePath({
-                        name        : child.name,
-                        location    : this._file.absolutePath
+                        name    : child.name,
+                        location: this._file.absolutePath
                     }),
                     cb
                 )
-            ).done((response : IResponse) => {
-                if (!response.success) {
-                    this._env.log('FAILURE: Could not open child of "%s".', this._file.absolutePath);
-                }
-
-                //this._$this.children('.content').children().remove();
-
-                var node = new FSTreeNode(
-                    response.result, 
-                    this._$this.children('.content'), 
-                    this._db, 
-                    this._env
-                );
-
-                this.nodes.push(node);
-                this._$this.addClass('open');
-                this.isOpen = true;
-            });
+            );
         });
+
+        async
+            .newTaskSeq(asyncOps)
+            .done(
+                function(...argArray : IArguments[]) => {
+                    var response : IResponse;
+
+                    this.nodes = new Array(this._file.childCount);
+                    
+                    for (var i = 0, args : IArguments; args = argArray[i]; i++) {
+                        response = args[0];
+
+                        if (!response.success) {
+                            this._env.log('FAILURE: Could not open child of "%s".', this._file.absolutePath);
+                        }
+
+                        var node = new FSTreeNode(
+                            response.result, 
+                            this._$this.children('.content'), 
+                            this._db, 
+                            this._env
+                        );
+
+                        this.nodes[i] = node;
+                    }
+
+                    this.nodes = this.nodes.sort(
+                        (a : FSTreeNode, b : FSTreeNode) => this._compareFn(a, b)
+                    );
+
+                    for (var i = 0, node : IFSTreeNode; node = this.nodes[i]; i++) {
+                        node.render();
+                    }
+
+                    this._$this.addClass('open');
+                    this.isOpen = true;
+                }
+            );
+    }
+
+    private _compareType(a : FSTreeNode, b : FSTreeNode) : number {
+        var aType               = a._file.type
+          , bType               = b._file.type
+          , aPriority           = FSTreeNode._TYPE_ORDER[aType]
+          , bPriority           = FSTreeNode._TYPE_ORDER[bType]
+          , aPriorityUndefined  = typeof aPriority === 'undefined'
+          , bPriorityUndefined  = typeof bPriority === 'undefined'
+
+        if (aPriorityUndefined && bPriorityUndefined) {
+            return 0;
+        }
+
+        if (aPriorityUndefined) {
+            return 1;
+        }
+
+        if (bPriorityUndefined) {
+            return -1;
+        }
+        
+        if (aPriority === bPriority) {
+            return 0
+        };
+
+        return aPriority > bPriority ? 1 : -1
+    }
+
+    private _compareName(a : FSTreeNode, b : FSTreeNode) : number {
+        return a._file.name > b._file.name ? 1 : -1;
+    }
+
+    private _compareFn(a : FSTreeNode, b : FSTreeNode) : number {
+        var type = this._compareType(a, b);
+        if (type != 0) {
+            return type;
+        }
+
+        return this._compareName(a, b);
     }
 }
 
@@ -144,7 +216,7 @@ export class FSTreeView {
                     this._db, 
                     this._env
                 );
-
+                this._root.render();
                 this._root.open();
             }
         );

@@ -2,7 +2,7 @@ define(["require", "exports"], function(require, exports) {
     var Async;
     (function (Async) {
         function sync(cb, ops) {
-            var resultArgs = [];
+            var resultArgs = new Array(ops.length);
             var completed = 0;
 
             var getCb = function (i) {
@@ -20,16 +20,17 @@ define(["require", "exports"], function(require, exports) {
         }
         Async.sync = sync;
         var Task = (function () {
-            function Task(ops) {
-                if(ops.length === 1) {
-                    this.op = ops[0];
+            function Task(ops, returnInArray) {
+                if (typeof returnInArray === "undefined") { returnInArray = false; }
+                if((ops.length === 1 && returnInArray) || ops.length > 1) {
+                    this.op = function (cb) {
+                        return sync(function () {
+                            return cb.apply(null, arguments);
+                        }, ops);
+                    };
                 } else {
-                    if(ops.length > 1) {
-                        this.op = function (cb) {
-                            return sync(function () {
-                                return cb.apply(null, arguments);
-                            }, ops);
-                        };
+                    if(ops.length === 1) {
+                        this.op = ops[0];
                     } else {
                         this.op = function (cb) {
                             return cb();
@@ -71,5 +72,9 @@ define(["require", "exports"], function(require, exports) {
         return new Async.Task(ops);
     }
     exports.newTask = newTask;
+    function newTaskSeq(ops) {
+        return new Async.Task(ops, true);
+    }
+    exports.newTaskSeq = newTaskSeq;
 })
 

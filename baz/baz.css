@@ -53,8 +53,7 @@ body
 }
 
 #logo
-{ /*font-family: 'AmaranthRegular'*/
-; font-family: HammersmithOne
+{ font-family: HammersmithOne
 ; font-size: 1.0em
 ; line-height: 20px
 ; position: absolute
@@ -282,7 +281,8 @@ body
 { float: left
 ;
 }
-  #solution-explorer .node .item .toggle-content-view .btn
+  #solution-explorer .node .item .toggle-content-view
+, #solution-explorer .node .item .toggle-content-view .btn
 , #solution-explorer .node .item .icon
 { width: 20px
 ; height: 20px

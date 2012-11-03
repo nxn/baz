@@ -7,7 +7,8 @@ module Async {
     // tasks were given. I.e., the first task will have the first callback parameter, the second task will
     // have the second callback parameter, etc.
     export function sync(cb : ICallback, ops : IAsyncOp[]) {
-        var resultArgs : IArguments[] = [], completed = 0;
+        var resultArgs : IArguments[] = new Array(ops.length)
+          , completed = 0;
 
         var getCb = (i) => {
             return () => {
@@ -24,10 +25,16 @@ module Async {
     export class Task implements ITask {
         private op : IAsyncOp;
 
-        constructor(ops : IAsyncOp[]) {
-            if (ops.length === 1)     this.op = ops[0];
-            else if (ops.length > 1)  this.op = cb => sync(() => cb.apply(null, arguments), ops);
-            else                      this.op = cb => cb();
+        constructor(ops : IAsyncOp[], returnInArray = false) {
+            if ((ops.length === 1 && returnInArray) || ops.length > 1) {
+                this.op = cb => sync(() => cb.apply(null, arguments), ops);
+            }
+            else if (ops.length === 1) {
+                this.op = ops[0];
+            }
+            else {
+                this.op = cb => cb();
+            }
         }
 
         // Takes a function that will be invoked with the arguments that were given to the current async task's
@@ -61,4 +68,8 @@ module Async {
 
 export function newTask(...ops : IAsyncOp[]) : ITask {
     return new Async.Task(ops);
+}
+
+export function newTaskSeq(ops : IAsyncOp[]) : ITask {
+    return new Async.Task(ops, true);
 }
