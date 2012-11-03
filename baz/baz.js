@@ -54,6 +54,13 @@ define(["require", "exports", './filedb', './async', './tree-view'], function(re
         content: null,
         children: null
     };
+    var aceLong = {
+        name: 'long ass filename right here homie.js',
+        type: 'text/javascript',
+        location: '/baz.sln/baz.tsp/ace',
+        content: null,
+        children: null
+    };
     var compilerProject = {
         name: 'typescript-compiler.tsp',
         type: 'application/vnd.baz.project',
@@ -137,6 +144,12 @@ define(["require", "exports", './filedb', './async', './tree-view'], function(re
         }
     }).next(function (fs) {
         return function (cb) {
+            return fs.put(aceLong, function () {
+                return cb(fs);
+            });
+        }
+    }).next(function (fs) {
+        return function (cb) {
             return fs.put(compilerProject, function () {
                 return cb(fs);
             });
@@ -154,7 +167,7 @@ define(["require", "exports", './filedb', './async', './tree-view'], function(re
             });
         }
     }).done(function (fs) {
-        return new ui.FSTreeView({
+        return (window).tree = new ui.FSTreeView({
             db: fs,
             environment: env,
             path: '/baz.sln',

@@ -14,9 +14,9 @@ interface IFSTreeNode {
     isOpen      : bool;
 
     render()    : void;
-    toggle()    : void;
-    open()      : void;
-    close()     : void;
+    toggle(cb?  : ICallback)    : void;
+    open(cb?    : ICallback)    : void;
+    close(cb?   : ICallback)    : void;
 }
 
 interface IFSTreeViewBGLayer {

@@ -22,7 +22,7 @@ define(["require", "exports"], function(require, exports) {
         var Task = (function () {
             function Task(ops, returnInArray) {
                 if (typeof returnInArray === "undefined") { returnInArray = false; }
-                if((ops.length === 1 && returnInArray) || ops.length > 1) {
+                if(returnInArray || ops.length > 1) {
                     this.op = function (cb) {
                         return sync(function () {
                             return cb.apply(null, arguments);

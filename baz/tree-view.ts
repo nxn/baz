@@ -6,7 +6,7 @@ import utils = module("./utils");
 
 class FSTreeNode implements IFSTreeNode {
     id                  : string;
-    nodes               : FSTreeNode[];
+    nodes               : IFSTreeNode[];
     isOpen              : bool;
 
     private _db         : IFileDb;
@@ -15,6 +15,8 @@ class FSTreeNode implements IFSTreeNode {
     private _$this      : JQuery;
     private _$parent    : JQuery;
 
+    private static _EFFECT_DURATION = 100;
+    private static _NOOP            = function() { };
     private static _TYPE_ORDER : { [type : string] : number; } = 
         (function() {
             var order = {};
@@ -37,8 +39,6 @@ class FSTreeNode implements IFSTreeNode {
         this.id         = utils.Guid.make();
         this.nodes      = [];
         this.isOpen     = false;
-
-        //this._render();
     }
 
     private _getMimeClass() {
@@ -62,25 +62,40 @@ class FSTreeNode implements IFSTreeNode {
         var $name           = $('<div/>').appendTo($file).addClass('name').text(this._file.name);
 
         var $actions        = $('<div/>').appendTo($file).addClass('actions');
+        var $refresh        = $('<div/>').appendTo($actions).addClass('refresh').click( _ => this.refresh() );
         var $add            = $('<div/>').appendTo($actions).addClass('add');
         var $remove         = $('<div/>').appendTo($actions).addClass('remove');
 
         var $contents       = $('<div/>').appendTo(this._$this).addClass('content');
     }
 
-    toggle() {
-        if (this.isOpen)    this.close();
-        else                this.open();
+    toggle(cb? : ICallback) {
+        if (this.isOpen)    this.close(cb);
+        else                this.open(cb);
     }
 
-    close() {
-        this._$this.children('.content').empty();
+    open(cb? : ICallback) {
+        this._$this.addClass('open');
+        this.isOpen = true;
+
+        var $content = this._$this.children('.content').hide();
+        this.refresh(() => $content.slideDown(FSTreeNode._EFFECT_DURATION, cb));
+    }
+
+    close(cb? : ICallback) {
         this._$this.removeClass('open');
         this.isOpen = false;
+
+        var $content = this._$this.children('.content');
+        $content.slideUp(FSTreeNode._EFFECT_DURATION, () => { $content.empty(); cb && cb() });
     }
 
-    open() {
-        this._$this.children('.content').empty();
+    refresh(cb? : ICallback) {
+        if (!this.isOpen) {
+            return;
+        }
+
+        this._$this.children('.content').empty()
 
         var i = 0, asyncOps = new Array(this._file.childCount);
 
@@ -102,7 +117,7 @@ class FSTreeNode implements IFSTreeNode {
                 function(...argArray : IArguments[]) => {
                     var response : IResponse;
 
-                    this.nodes = new Array(this._file.childCount);
+                    var nodes : FSTreeNode[] = new Array(this._file.childCount);
                     
                     for (var i = 0, args : IArguments; args = argArray[i]; i++) {
                         response = args[0];
@@ -111,17 +126,15 @@ class FSTreeNode implements IFSTreeNode {
                             this._env.log('FAILURE: Could not open child of "%s".', this._file.absolutePath);
                         }
 
-                        var node = new FSTreeNode(
+                        nodes[i] = new FSTreeNode(
                             response.result, 
                             this._$this.children('.content'), 
                             this._db, 
                             this._env
                         );
-
-                        this.nodes[i] = node;
                     }
 
-                    this.nodes = this.nodes.sort(
+                    this.nodes = nodes.sort(
                         (a : FSTreeNode, b : FSTreeNode) => this._compareFn(a, b)
                     );
 
@@ -129,8 +142,7 @@ class FSTreeNode implements IFSTreeNode {
                         node.render();
                     }
 
-                    this._$this.addClass('open');
-                    this.isOpen = true;
+                    cb && cb();
                 }
             );
     }

@@ -13,6 +13,9 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
             this.nodes = [];
             this.isOpen = false;
         }
+        FSTreeNode._EFFECT_DURATION = 100;
+        FSTreeNode._NOOP = function () {
+        };
         FSTreeNode._TYPE_ORDER = (function () {
             var order = {
             };
@@ -39,24 +42,42 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
             var $icon = $('<div/>').appendTo($file).addClass('icon');
             var $name = $('<div/>').appendTo($file).addClass('name').text(this._file.name);
             var $actions = $('<div/>').appendTo($file).addClass('actions');
+            var $refresh = $('<div/>').appendTo($actions).addClass('refresh').click(function (_) {
+                return _this.refresh();
+            });
             var $add = $('<div/>').appendTo($actions).addClass('add');
             var $remove = $('<div/>').appendTo($actions).addClass('remove');
             var $contents = $('<div/>').appendTo(this._$this).addClass('content');
         };
-        FSTreeNode.prototype.toggle = function () {
+        FSTreeNode.prototype.toggle = function (cb) {
             if(this.isOpen) {
-                this.close();
+                this.close(cb);
             } else {
-                this.open();
+                this.open(cb);
             }
         };
-        FSTreeNode.prototype.close = function () {
-            this._$this.children('.content').empty();
+        FSTreeNode.prototype.open = function (cb) {
+            this._$this.addClass('open');
+            this.isOpen = true;
+            var $content = this._$this.children('.content').hide();
+            this.refresh(function () {
+                return $content.slideDown(FSTreeNode._EFFECT_DURATION, cb);
+            });
+        };
+        FSTreeNode.prototype.close = function (cb) {
             this._$this.removeClass('open');
             this.isOpen = false;
+            var $content = this._$this.children('.content');
+            $content.slideUp(FSTreeNode._EFFECT_DURATION, function () {
+                $content.empty();
+                cb && cb();
+            });
         };
-        FSTreeNode.prototype.open = function () {
+        FSTreeNode.prototype.refresh = function (cb) {
             var _this = this;
+            if(!this.isOpen) {
+                return;
+            }
             this._$this.children('.content').empty();
             var i = 0;
             var asyncOps = new Array(this._file.childCount);
@@ -75,23 +96,21 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
                     argArray[_i] = arguments[_i + 0];
                 }
                 var response;
-                _this.nodes = new Array(_this._file.childCount);
+                var nodes = new Array(_this._file.childCount);
                 for(var i = 0, args; args = argArray[i]; i++) {
                     response = args[0];
                     if(!response.success) {
                         _this._env.log('FAILURE: Could not open child of "%s".', _this._file.absolutePath);
                     }
-                    var node = new FSTreeNode(response.result, _this._$this.children('.content'), _this._db, _this._env);
-                    _this.nodes[i] = node;
+                    nodes[i] = new FSTreeNode(response.result, _this._$this.children('.content'), _this._db, _this._env);
                 }
-                _this.nodes = _this.nodes.sort(function (a, b) {
+                _this.nodes = nodes.sort(function (a, b) {
                     return _this._compareFn(a, b);
                 });
                 for(var i = 0, node; node = _this.nodes[i]; i++) {
                     node.render();
                 }
-                _this._$this.addClass('open');
-                _this.isOpen = true;
+                cb && cb();
             });
         };
         FSTreeNode.prototype._compareType = function (a, b) {

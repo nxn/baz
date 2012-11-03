@@ -26,7 +26,7 @@ module Async {
         private op : IAsyncOp;
 
         constructor(ops : IAsyncOp[], returnInArray = false) {
-            if ((ops.length === 1 && returnInArray) || ops.length > 1) {
+            if (returnInArray || ops.length > 1) {
                 this.op = cb => sync(() => cb.apply(null, arguments), ops);
             }
             else if (ops.length === 1) {
