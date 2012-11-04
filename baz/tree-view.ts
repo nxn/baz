@@ -14,6 +14,7 @@ class FSTreeNode implements IFSTreeNode {
     private _file       : IFile;
     private _$this      : JQuery;
     private _$parent    : JQuery;
+    private _tree       : FSTreeView;
 
     private static _EFFECT_DURATION = 100;
     private static _NOOP            = function() { };
@@ -30,14 +31,15 @@ class FSTreeNode implements IFSTreeNode {
         file                : IFile,
         $parent             : JQuery,
         db                  : IFileDb, 
-        environment         : IEnvironment
+        environment         : IEnvironment,
+        tree                : FSTreeView
     ) {
         this._db        = db;
         this._env       = environment;
         this._file      = file;
         this._$parent   = $parent;
+        this._tree      = tree;
         this.id         = utils.Guid.make();
-        this.nodes      = [];
         this.isOpen     = false;
     }
 
@@ -50,18 +52,21 @@ class FSTreeNode implements IFSTreeNode {
             this._$this = $('<div/>').appendTo(this._$parent).addClass('node');
         }
 
-        var $file           = $('<div/>').appendTo(this._$this).addClass(this._getMimeClass() + " item");
+        var $item = $('<div/>')
+            .appendTo(this._$this)
+            .addClass(this._getMimeClass() + " item")
+            .attr('id', this.id);
 
-        var $toggleWrapper  = $('<div/>').appendTo($file).addClass('toggle-content-view');
+        var $toggleWrapper  = $('<div/>').appendTo($item).addClass('toggle-content-view');
 
         if (this._file.childCount > 0) {
             $('<div/>').appendTo($toggleWrapper).addClass('btn').click( _ => this.toggle() );
         }
 
-        var $icon           = $('<div/>').appendTo($file).addClass('icon');
-        var $name           = $('<div/>').appendTo($file).addClass('name').text(this._file.name);
+        var $icon           = $('<div/>').appendTo($item).addClass('icon');
+        var $name           = $('<div/>').appendTo($item).addClass('name').text(this._file.name);
 
-        var $actions        = $('<div/>').appendTo($file).addClass('actions');
+        var $actions        = $('<div/>').appendTo($item).addClass('actions');
         var $refresh        = $('<div/>').appendTo($actions).addClass('refresh').click( _ => this.refresh() );
         var $add            = $('<div/>').appendTo($actions).addClass('add');
         var $remove         = $('<div/>').appendTo($actions).addClass('remove');
@@ -79,7 +84,12 @@ class FSTreeNode implements IFSTreeNode {
         this.isOpen = true;
 
         var $content = this._$this.children('.content').hide();
-        this.refresh(() => $content.slideDown(FSTreeNode._EFFECT_DURATION, cb));
+        this.refresh(() => {
+            $content.slideDown(FSTreeNode._EFFECT_DURATION, () => {
+                this._tree.fireTreeChange(this);
+                cb && cb();
+            })
+        });
     }
 
     close(cb? : ICallback) {
@@ -87,7 +97,12 @@ class FSTreeNode implements IFSTreeNode {
         this.isOpen = false;
 
         var $content = this._$this.children('.content');
-        $content.slideUp(FSTreeNode._EFFECT_DURATION, () => { $content.empty(); cb && cb() });
+        $content.slideUp(FSTreeNode._EFFECT_DURATION, () => { 
+            $content.empty();
+            this.nodes = null;
+            this._tree.fireTreeChange(this);
+            cb && cb();
+        });
     }
 
     refresh(cb? : ICallback) {
@@ -130,18 +145,20 @@ class FSTreeNode implements IFSTreeNode {
                             response.result, 
                             this._$this.children('.content'), 
                             this._db, 
-                            this._env
+                            this._env,
+                            this._tree
                         );
                     }
 
-                    this.nodes = nodes.sort(
+                    nodes = nodes.sort(
                         (a : FSTreeNode, b : FSTreeNode) => this._compareFn(a, b)
                     );
 
-                    for (var i = 0, node : IFSTreeNode; node = this.nodes[i]; i++) {
+                    for (var i = 0, node : FSTreeNode; node = nodes[i]; i++) {
                         node.render();
                     }
 
+                    this.nodes = nodes;
                     cb && cb();
                 }
             );
@@ -189,9 +206,28 @@ class FSTreeNode implements IFSTreeNode {
 }
 
 class FSTreeViewBGLayer implements IFSTreeViewBGLayer {
+    private _parentSel  : string;
+    private _$this      : JQuery;
+
+    constructor(parentSel : string) {
+        this._parentSel = parentSel;
+        this._$this     = null;
+    }
+
+    render() {
+        if (!this._$this) {
+            this._$this = $('<div/>').appendTo(this._parentSel);
+        }
+    }
+
+    ensureItems(items : IFSTreeNode[]) : void {
+        for (var i = 0, item : IFSTreeNode; item = items[i]; i++) {
+            item.id
+        }
+    }
 }
 
-export class FSTreeView {
+export class FSTreeView implements IFSTreeView {
     private static _DEFAULT_ENV : IEnvironment  = { log: function(any, ...args : any[]) { } }
 
     private _db         : IFileDb;
@@ -201,13 +237,30 @@ export class FSTreeView {
     private _bg         : IFSTreeViewBGLayer;
     private _parentSel  : string;
 
+    private _treeChangeHandlers : IFSTreeViewEventHandler[];
+
     constructor(config : IFSTreeConfig) {
         this._db            = config.db;
         this._path          = config.path           || '/';
         this._env           = config.environment    || FSTreeView._DEFAULT_ENV;
         this._parentSel     = config.parentSel;
-        this._bg            = new FSTreeViewBGLayer();
+        this._bg            = new FSTreeViewBGLayer(this._parentSel);
 
+        this._treeChangeHandlers = [];
+
+        this.onTreeChange((sender : IFSTreeNode) => {
+            var items : IFSTreeNode[] = [];
+            this.traverse((node : IFSTreeNode) => {
+                items.push(node);
+                return true;
+            });
+            this._bg.ensureItems(items);
+        });
+
+        this._openRoot();
+    }
+
+    private _openRoot() {
         async
             .newTask(
                 cb => this._db.get(this._path, cb),
@@ -222,15 +275,46 @@ export class FSTreeView {
                     );
                 }
 
-                this._root = new FSTreeNode(
+                var root = new FSTreeNode(
                     response.result, 
                     $(this._parentSel), 
                     this._db, 
-                    this._env
+                    this._env,
+                    this
                 );
-                this._root.render();
-                this._root.open();
+                
+                this._root = root;
+                root.render();
+                root.open();
             }
         );
+    }
+
+    traverse(fn : (node : IFSTreeNode) => bool) {
+        this._traverse(this._root, fn);
+    }
+
+    private _traverse(startNode : IFSTreeNode, fn : (node :IFSTreeNode) => bool) {
+        if (!fn(startNode) || !startNode.isOpen || !startNode.nodes) {
+            return;
+        }
+
+        for (var i = 0, node; node = startNode.nodes[i]; i++) {
+            this._traverse(node, fn);
+        }
+    }
+
+    fireTreeChange(sender : IFSTreeNode) {
+        if (!this._treeChangeHandlers) {
+            return;
+        }
+
+        for (var i = 0, handler; handler = this._treeChangeHandlers[i]; i++) {
+            handler(sender);
+        }
+    }
+
+    onTreeChange(handler : IFSTreeViewEventHandler) {
+        this._treeChangeHandlers.push(handler);
     }
 }

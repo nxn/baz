@@ -4,13 +4,13 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
     var utils = __utils__;
 
     var FSTreeNode = (function () {
-        function FSTreeNode(file, $parent, db, environment) {
+        function FSTreeNode(file, $parent, db, environment, tree) {
             this._db = db;
             this._env = environment;
             this._file = file;
             this._$parent = $parent;
+            this._tree = tree;
             this.id = utils.Guid.make();
-            this.nodes = [];
             this.isOpen = false;
         }
         FSTreeNode._EFFECT_DURATION = 100;
@@ -32,16 +32,16 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
             if(!this._$this) {
                 this._$this = $('<div/>').appendTo(this._$parent).addClass('node');
             }
-            var $file = $('<div/>').appendTo(this._$this).addClass(this._getMimeClass() + " item");
-            var $toggleWrapper = $('<div/>').appendTo($file).addClass('toggle-content-view');
+            var $item = $('<div/>').appendTo(this._$this).addClass(this._getMimeClass() + " item").attr('id', this.id);
+            var $toggleWrapper = $('<div/>').appendTo($item).addClass('toggle-content-view');
             if(this._file.childCount > 0) {
                 $('<div/>').appendTo($toggleWrapper).addClass('btn').click(function (_) {
                     return _this.toggle();
                 });
             }
-            var $icon = $('<div/>').appendTo($file).addClass('icon');
-            var $name = $('<div/>').appendTo($file).addClass('name').text(this._file.name);
-            var $actions = $('<div/>').appendTo($file).addClass('actions');
+            var $icon = $('<div/>').appendTo($item).addClass('icon');
+            var $name = $('<div/>').appendTo($item).addClass('name').text(this._file.name);
+            var $actions = $('<div/>').appendTo($item).addClass('actions');
             var $refresh = $('<div/>').appendTo($actions).addClass('refresh').click(function (_) {
                 return _this.refresh();
             });
@@ -57,19 +57,26 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
             }
         };
         FSTreeNode.prototype.open = function (cb) {
+            var _this = this;
             this._$this.addClass('open');
             this.isOpen = true;
             var $content = this._$this.children('.content').hide();
             this.refresh(function () {
-                return $content.slideDown(FSTreeNode._EFFECT_DURATION, cb);
+                $content.slideDown(FSTreeNode._EFFECT_DURATION, function () {
+                    _this._tree.fireTreeChange(_this);
+                    cb && cb();
+                });
             });
         };
         FSTreeNode.prototype.close = function (cb) {
+            var _this = this;
             this._$this.removeClass('open');
             this.isOpen = false;
             var $content = this._$this.children('.content');
             $content.slideUp(FSTreeNode._EFFECT_DURATION, function () {
                 $content.empty();
+                _this.nodes = null;
+                _this._tree.fireTreeChange(_this);
                 cb && cb();
             });
         };
@@ -102,14 +109,15 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
                     if(!response.success) {
                         _this._env.log('FAILURE: Could not open child of "%s".', _this._file.absolutePath);
                     }
-                    nodes[i] = new FSTreeNode(response.result, _this._$this.children('.content'), _this._db, _this._env);
+                    nodes[i] = new FSTreeNode(response.result, _this._$this.children('.content'), _this._db, _this._env, _this._tree);
                 }
-                _this.nodes = nodes.sort(function (a, b) {
+                nodes = nodes.sort(function (a, b) {
                     return _this._compareFn(a, b);
                 });
-                for(var i = 0, node; node = _this.nodes[i]; i++) {
+                for(var i = 0, node; node = nodes[i]; i++) {
                     node.render();
                 }
+                _this.nodes = nodes;
                 cb && cb();
             });
         };
@@ -149,7 +157,20 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
         return FSTreeNode;
     })();    
     var FSTreeViewBGLayer = (function () {
-        function FSTreeViewBGLayer() { }
+        function FSTreeViewBGLayer(parentSel) {
+            this._parentSel = parentSel;
+            this._$this = null;
+        }
+        FSTreeViewBGLayer.prototype.render = function () {
+            if(!this._$this) {
+                this._$this = $('<div/>').appendTo(this._parentSel);
+            }
+        };
+        FSTreeViewBGLayer.prototype.ensureItems = function (items) {
+            for(var i = 0, item; item = items[i]; i++) {
+                item.id;
+            }
+        };
         return FSTreeViewBGLayer;
     })();    
     var FSTreeView = (function () {
@@ -159,7 +180,28 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
             this._path = config.path || '/';
             this._env = config.environment || FSTreeView._DEFAULT_ENV;
             this._parentSel = config.parentSel;
-            this._bg = new FSTreeViewBGLayer();
+            this._bg = new FSTreeViewBGLayer(this._parentSel);
+            this._treeChangeHandlers = [];
+            this.onTreeChange(function (sender) {
+                var items = [];
+                _this.traverse(function (node) {
+                    items.push(node);
+                    return true;
+                });
+                _this._bg.ensureItems(items);
+            });
+            this._openRoot();
+        }
+        FSTreeView._DEFAULT_ENV = {
+            log: function (any) {
+                var args = [];
+                for (var _i = 0; _i < (arguments.length - 1); _i++) {
+                    args[_i] = arguments[_i + 1];
+                }
+            }
+        };
+        FSTreeView.prototype._openRoot = function () {
+            var _this = this;
             async.newTask(function (cb) {
                 return _this._db.get(_this._path, cb);
             }, function (cb) {
@@ -169,18 +211,33 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
                 if(!response.success) {
                     _this._env.log("Failed to open FS root (tree-view.ts:FSTreeView:constructor)");
                 }
-                _this._root = new FSTreeNode(response.result, $(_this._parentSel), _this._db, _this._env);
-                _this._root.render();
-                _this._root.open();
+                var root = new FSTreeNode(response.result, $(_this._parentSel), _this._db, _this._env, _this);
+                _this._root = root;
+                root.render();
+                root.open();
             });
-        }
-        FSTreeView._DEFAULT_ENV = {
-            log: function (any) {
-                var args = [];
-                for (var _i = 0; _i < (arguments.length - 1); _i++) {
-                    args[_i] = arguments[_i + 1];
-                }
+        };
+        FSTreeView.prototype.traverse = function (fn) {
+            this._traverse(this._root, fn);
+        };
+        FSTreeView.prototype._traverse = function (startNode, fn) {
+            if(!fn(startNode) || !startNode.isOpen || !startNode.nodes) {
+                return;
             }
+            for(var i = 0, node; node = startNode.nodes[i]; i++) {
+                this._traverse(node, fn);
+            }
+        };
+        FSTreeView.prototype.fireTreeChange = function (sender) {
+            if(!this._treeChangeHandlers) {
+                return;
+            }
+            for(var i = 0, handler; handler = this._treeChangeHandlers[i]; i++) {
+                handler(sender);
+            }
+        };
+        FSTreeView.prototype.onTreeChange = function (handler) {
+            this._treeChangeHandlers.push(handler);
         };
         return FSTreeView;
     })();

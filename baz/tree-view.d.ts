@@ -13,11 +13,20 @@ interface IFSTreeNode {
     nodes       : IFSTreeNode[];
     isOpen      : bool;
 
-    render()    : void;
     toggle(cb?  : ICallback)    : void;
     open(cb?    : ICallback)    : void;
     close(cb?   : ICallback)    : void;
 }
 
+interface IFSTreeViewEventHandler {
+    (sender : IFSTreeNode): any;
+}
+
+interface IFSTreeView {
+    traverse(fn : (node : IFSTreeNode) => bool) : void;
+    onTreeChange(handler : IFSTreeViewEventHandler) : void;
+}
+
 interface IFSTreeViewBGLayer {
+    ensureItems(nodes : IFSTreeNode[]) : void;
 }
