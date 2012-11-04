@@ -4,12 +4,13 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
     var utils = __utils__;
 
     var FSTreeNode = (function () {
-        function FSTreeNode(file, $parent, db, environment, tree) {
+        function FSTreeNode(file, $parent, db, environment, tree, indentLevel) {
             this._db = db;
             this._env = environment;
             this._file = file;
             this._$parent = $parent;
             this._tree = tree;
+            this._indent = indentLevel || 0;
             this.id = utils.Guid.make();
             this.isOpen = false;
         }
@@ -30,13 +31,14 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
         FSTreeNode.prototype.render = function () {
             var _this = this;
             if(!this._$this) {
-                this._$this = $('<div/>').appendTo(this._$parent).addClass('node');
+                this._$this = $('<div/>').appendTo(this._$parent).addClass('node').attr('id', this.id);
             }
-            var $item = $('<div/>').appendTo(this._$this).addClass(this._getMimeClass() + " item").attr('id', this.id).hover(function () {
+            var $itemContainer = $('<div/>').addClass('item-container').appendTo(this._$this).css('padding-left', (this._tree.indentAmount * this._indent) + 'px').hover(function () {
                 return _this._tree.fireNodeMouseIn(_this);
             }, function () {
                 return _this._tree.fireNodeMouseOut(_this);
             });
+            var $item = $('<div/>').appendTo($itemContainer).addClass('item ' + this._getMimeClass());
             var $toggleWrapper = $('<div/>').appendTo($item).addClass('toggle-content-view');
             if(this._file.childCount > 0) {
                 $('<div/>').appendTo($toggleWrapper).addClass('btn').click(function (_) {
@@ -118,7 +120,7 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
                     if(!response.success) {
                         _this._env.log('FAILURE: Could not open child of "%s".', _this._file.absolutePath);
                     }
-                    nodes[i] = new FSTreeNode(response.result, _this._$this.children('.content'), _this._db, _this._env, _this._tree);
+                    nodes[i] = new FSTreeNode(response.result, _this._$this.children('.content'), _this._db, _this._env, _this._tree, _this._indent + 1);
                 }
                 _this.nodes = nodes.sort(function (a, b) {
                     return _this._compareFn(a, b);
@@ -164,61 +166,10 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
         };
         return FSTreeNode;
     })();    
-    var FSTreeViewBGLayer = (function () {
-        function FSTreeViewBGLayer($parent) {
-            this._$parent = $parent;
-            this._$this = null;
-        }
-        FSTreeViewBGLayer._RX_ITEM_ID = /^bg-(.*)/;
-        FSTreeViewBGLayer.prototype.render = function () {
-            if(!this._$this) {
-                this._$this = $('<div/>').addClass('bg-layer').prependTo(this._$parent);
-            }
-            this._$this.empty();
-            if(!this._items) {
-                return;
-            }
-            for(var i = 0, id; id = this._itemOrder[i]; i++) {
-                this._items[id].appendTo(this._$this);
-            }
-        };
-        FSTreeViewBGLayer.prototype.ensureItems = function (itemIds) {
-            var _this = this;
-            this._itemOrder = itemIds;
-            this._items = {
-            };
-            for(var i = 0, id; id = itemIds[i]; i++) {
-                this._items[id] = $('<div/>').attr('id', 'bg-' + id).hover(function (ev) {
-                    var match = FSTreeViewBGLayer._RX_ITEM_ID.exec((ev.target).id);
-                    if(match && match[1]) {
-                        _this.mouseOver(match[1]);
-                    }
-                }, function (ev) {
-                    var match = FSTreeViewBGLayer._RX_ITEM_ID.exec((ev.target).id);
-                    if(match && match[1]) {
-                        _this.mouseOut(match[1]);
-                    }
-                });
-            }
-            this.render();
-        };
-        FSTreeViewBGLayer.prototype.mouseOver = function (itemId) {
-            this._items[itemId].addClass('hover');
-            $('#' + itemId).addClass('hover');
-        };
-        FSTreeViewBGLayer.prototype.mouseOut = function (itemId) {
-            this._items[itemId].removeClass('hover');
-            $('#' + itemId).removeClass('hover');
-        };
-        FSTreeViewBGLayer.prototype.select = function (itemId) {
-            this._selected.removeClass('selected');
-            this._selected = this._items[itemId].addClass('selected');
-        };
-        return FSTreeViewBGLayer;
-    })();    
     var FSTreeView = (function () {
         function FSTreeView(config) {
             var _this = this;
+            this.indentAmount = config.indentAmount || 20;
             this._db = config.db;
             this._path = config.path || '/';
             this._env = config.environment || FSTreeView._DEFAULT_ENV;
@@ -227,25 +178,8 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
             this._nodeMouseInHandlers = [];
             this._nodeMouseOutHandlers = [];
             this._nodeSelectHandlers = [];
-            this.onTreeChange(function (sender) {
-                var itemIds = [];
-                _this.traverse(function (node) {
-                    itemIds.push(node.id);
-                    return true;
-                });
-                _this._bg.ensureItems(itemIds);
-            });
-            this.onNodeSelect(function (sender) {
-                return _this._bg.select(sender.id);
-            });
-            this.onNodeHover(function (mouseInSender) {
-                return _this._bg.mouseOver(mouseInSender.id);
-            }, function (mouseOutSender) {
-                return _this._bg.mouseOut(mouseOutSender.id);
-            });
             $(function () {
                 _this.render();
-                _this._bg = new FSTreeViewBGLayer(_this._$this);
                 _this._openRoot();
             });
         }

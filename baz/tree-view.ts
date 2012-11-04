@@ -15,6 +15,7 @@ class FSTreeNode implements IFSTreeNode {
     private _$this      : JQuery;
     private _$parent    : JQuery;
     private _tree       : FSTreeView;
+    private _indent     : number;
 
     private static _EFFECT_DURATION = 100;
     private static _NOOP            = function() { };
@@ -32,13 +33,15 @@ class FSTreeNode implements IFSTreeNode {
         $parent         : JQuery,
         db              : IFileDb, 
         environment     : IEnvironment,
-        tree            : FSTreeView
+        tree            : FSTreeView,
+        indentLevel?    : number
     ) {
         this._db        = db;
         this._env       = environment;
         this._file      = file;
         this._$parent   = $parent;
         this._tree      = tree;
+        this._indent    = indentLevel || 0;
         this.id         = utils.Guid.make();
         this.isOpen     = false;
     }
@@ -49,17 +52,19 @@ class FSTreeNode implements IFSTreeNode {
 
     render() {
         if (!this._$this) {
-            this._$this = $('<div/>').appendTo(this._$parent).addClass('node');
+            this._$this = $('<div/>').appendTo(this._$parent).addClass('node').attr('id', this.id)
         }
 
-        var $item = $('<div/>')
+        var $itemContainer = $('<div/>')
+            .addClass('item-container')
             .appendTo(this._$this)
-            .addClass(this._getMimeClass() + " item")
-            .attr('id', this.id)
+            .css('padding-left', (this._tree.indentAmount * this._indent) + 'px')
             .hover(
                 () => this._tree.fireNodeMouseIn(this),
                 () => this._tree.fireNodeMouseOut(this)
             );
+
+        var $item = $('<div/>').appendTo($itemContainer).addClass('item ' + this._getMimeClass())
 
         var $toggleWrapper  = $('<div/>').appendTo($item).addClass('toggle-content-view');
 
@@ -156,7 +161,8 @@ class FSTreeNode implements IFSTreeNode {
                             this._$this.children('.content'), 
                             this._db, 
                             this._env,
-                            this._tree
+                            this._tree,
+                            this._indent + 1
                         );
                     }
 
@@ -214,78 +220,6 @@ class FSTreeNode implements IFSTreeNode {
     }
 }
 
-class FSTreeViewBGLayer implements IFSTreeViewBGLayer {
-    private static _RX_ITEM_ID = /^bg-(.*)/;
-
-    private _$parent    : JQuery;
-    private _$this      : JQuery;
-    private _items      : { [ id : string ] : JQuery; };
-    private _itemOrder  : string[];
-    private _selected   : JQuery;
-
-    constructor($parent : JQuery) {
-        this._$parent   = $parent;
-        this._$this     = null;
-    }
-
-    render() {
-        if (!this._$this) {
-            this._$this = $('<div/>').addClass('bg-layer').prependTo(this._$parent);
-        }
-
-        this._$this.empty();
-
-        if (!this._items) {
-            return;
-        }
-
-        for (var i = 0, id : string; id = this._itemOrder[i]; i++) {
-            this._items[id].appendTo(this._$this);
-        }
-    }
-
-    ensureItems(itemIds : string[]) : void {
-        this._itemOrder = itemIds;
-        this._items = { };
-
-        for (var i = 0, id; id = itemIds[i]; i++) {
-            this._items[id] = $('<div/>')
-                .attr('id', 'bg-' + id)
-                .hover(
-                    (ev) => { 
-                        var match = FSTreeViewBGLayer._RX_ITEM_ID.exec((<any>ev.target).id);
-                        if (match && match[1]) {
-                            this.mouseOver(match[1]);
-                        }
-                    },
-                    (ev) => {
-                        var match = FSTreeViewBGLayer._RX_ITEM_ID.exec((<any>ev.target).id);
-                        if (match && match[1]) {
-                            this.mouseOut(match[1]);
-                        }
-                    }
-                );
-        }
-
-        this.render();
-    }
-
-    mouseOver(itemId) {
-        this._items[itemId].addClass('hover');
-        $('#' + itemId).addClass('hover');
-    }
-
-    mouseOut(itemId) {
-        this._items[itemId].removeClass('hover');
-        $('#' + itemId).removeClass('hover');
-    }
-
-    select(itemId) {
-        this._selected.removeClass('selected');
-        this._selected = this._items[itemId].addClass('selected');
-    }
-}
-
 export class FSTreeView implements IFSTreeView {
     private static _DEFAULT_ENV : IEnvironment  = { log: function(any, ...args : any[]) { } }
 
@@ -302,7 +236,10 @@ export class FSTreeView implements IFSTreeView {
     private _nodeMouseInHandlers    : IFSTreeViewEventHandler[];
     private _nodeMouseOutHandlers   : IFSTreeViewEventHandler[];
 
+    indentAmount : number;
+
     constructor(config : IFSTreeConfig) {
+        this.indentAmount   = config.indentAmount   || 20;
         this._db            = config.db;
         this._path          = config.path           || '/';
         this._env           = config.environment    || FSTreeView._DEFAULT_ENV;
@@ -313,25 +250,8 @@ export class FSTreeView implements IFSTreeView {
         this._nodeMouseOutHandlers  = [];
         this._nodeSelectHandlers    = [];
 
-        this.onTreeChange((sender : IFSTreeNode) => {
-            var itemIds : string[] = [];
-            this.traverse((node : IFSTreeNode) => {
-                itemIds.push(node.id);
-                return true;
-            });
-            this._bg.ensureItems(itemIds);
-        });
-
-        this.onNodeSelect((sender : IFSTreeNode) => this._bg.select(sender.id));
-
-        this.onNodeHover(
-            (mouseInSender  : IFSTreeNode) => this._bg.mouseOver(mouseInSender.id), 
-            (mouseOutSender : IFSTreeNode) => this._bg.mouseOut(mouseOutSender.id)
-        );
-
         $(() => {
             this.render();
-            this._bg = new FSTreeViewBGLayer(this._$this);
             this._openRoot();
         });
     }
