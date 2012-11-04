@@ -1,0 +1,123 @@
+﻿.tree-view
+{ font-family: 'Segoe UI'
+; background: #efefef
+; position: relative
+}
+
+.tree-view .bg-layer
+{ position: absolute
+; top: 0px
+; bottom: 0px
+; left: 0px
+; right: 0px
+}
+
+.tree-view .bg-layer > div
+{ height: 20px
+}
+
+.tree-view .bg-layer > div.hover
+{ background-color: #fafafa
+}
+
+.tree-view .node .item
+{ overflow: hidden
+; height: 20px
+; line-height: 20px
+; position: relative
+}
+
+.tree-view .node .item > div
+{ position: absolute
+; top: 0px
+; height: 20px
+}
+  .tree-view .node .item .toggle-content-view
+, .tree-view .node .item .toggle-content-view .btn
+, .tree-view .node .item .icon
+{ width: 20px
+}
+.tree-view .item .toggle-content-view .btn
+{ background-image: url(img/closed.png)
+; background-repeat: no-repeat
+; background-position: 50% 50%
+; height: 20px
+}
+.tree-view .item .toggle-content-view .btn:hover
+{ background-image: url(img/closed-hover.png)
+}
+.tree-view .open > .item > .toggle-content-view > .btn
+{ background-image: url(img/open.png)
+}
+.tree-view .open > .item > .toggle-content-view > .btn:hover
+{ background-image: url(img/open-hover.png)
+}
+.tree-view .item .icon
+{ background-image: url(img/iconSweets2/16/dark/Files/16-Document.png)
+; background-repeat: no-repeat
+; background-position: 50% 50%
+; left: 20px
+}
+.tree-view .application-vnd-baz-solution .icon
+{ background-image: url(img/iconSweets2/16/dark/Misc/16-File-Cabinet.png)
+}
+.tree-view .application-vnd-baz-project .icon
+{ background-image: url(img/iconSweets2/16/dark/Misc/16-Archive.png)
+}
+.tree-view .application-vnd-baz-directory .icon
+{ background-image: url(img/iconSweets2/16/dark/Misc/16-Folder.png)
+}
+.tree-view .item .name
+{ padding: 0px 5px
+; overflow: hidden
+; white-space: nowrap
+; text-overflow: ellipsis
+; position: absolute
+; left: 40px
+; right: 0px
+}
+.tree-view .item.hover .name
+{ right: 60px
+}
+.tree-view .node .content
+{ padding-left: 20px
+}
+.tree-view .item .actions 
+{ height: 20px
+; overflow: hidden
+; display: none
+; position: absolute
+; right: 0px
+; background-repeat: no-repeat
+; background-position: 0px 50%
+}
+.tree-view .item.hover > .actions
+{ display: block !important
+}
+.tree-view .item .actions div
+{ width: 20px
+; height: 20px
+; float: left
+}
+  .tree-view .item .actions .add
+, .tree-view .item .actions .remove
+, .tree-view .item .actions .refresh
+{ background-repeat: no-repeat
+; background-image: url(img/iconSweets1/16/light/16-Plus.png)
+; background-position: 50% 50%
+}
+.tree-view .item .actions .refresh
+{ background-image: url(img/iconSweets2/16/light/Arrows/16-Refresh-4.png)
+}
+.tree-view .item .actions .remove
+{ background-image: url(img/iconSweets1/16/light/16-Minus.png)
+}
+.tree-view .item .actions .refresh:hover
+{ background-image: url(img/iconSweets2/16/dark/Arrows/16-Refresh-4.png)
+}
+.tree-view .item .actions .add:hover
+{ background-image: url(img/iconSweets1/16/dark/16-Plus.png)
+}
+.tree-view .item .actions .remove:hover
+{ background-image: url(img/iconSweets1/16/dark/16-Minus.png)
+}

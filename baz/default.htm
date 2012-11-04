@@ -5,6 +5,7 @@
     <meta charset="utf-8" />
     <title>baz("Project Name");</title>
     <link rel="stylesheet" href="baz.css" type="text/css" />
+    <link rel="stylesheet" href="tree-view.css" type="text/css" />
     <script src="require.js"></script>
     <script src="handlebars-1.0.rc.1.js"></script>
     <script src="jquery-1.8.2.min.js"></script>
@@ -28,21 +29,6 @@
         .ace-tm .ace_print_margin { width: auto !important; border-left: 1px dotted #ddd; background: rgba(0, 0, 0, 0.022) !important; right: 0px !important}
         /*.ace_editor .ace_print_margin_layer { border-left: 1px dotted #ddd; }*/
     </style>
-    <script id="tpl-tree-view" type="text/x-handlebars-template">
-        {{#each this}}
-        <div class="{{type}}" style="padding-left: {{indent}}px;">
-            <div class="toggle-content-view">
-                <div class="btn"></div>
-            </div>
-            <div class="icon"></div>
-            <div class="name">{{name}}</div>
-            <div class="actions">
-                <div class="add"></div>
-                <div class="remove"></div>
-            </div>
-        </div>
-        {{/each}}
-    </script>
 </head>
 <body>
     <div id="wrapper">
@@ -173,15 +159,12 @@ export class Chain {
                     <li class="source-control"><div class="icon"></div></li>
                     <li class="properties"><div class="icon"></div></li>
                 </ul>
-                <div id="solution-explorer">
-                </div>
+                <div id="solution-explorer"></div>
                 <div class="options">
 
                 </div>
                 <div class="info">
-                    <div class="float-right">
-                        1 Project :: 3 Files
-                    </div>
+                    <div class="float-right"></div>
                 </div>
             </div>
         </div>

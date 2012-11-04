@@ -32,7 +32,11 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
             if(!this._$this) {
                 this._$this = $('<div/>').appendTo(this._$parent).addClass('node');
             }
-            var $item = $('<div/>').appendTo(this._$this).addClass(this._getMimeClass() + " item").attr('id', this.id);
+            var $item = $('<div/>').appendTo(this._$this).addClass(this._getMimeClass() + " item").attr('id', this.id).hover(function () {
+                return _this._tree.fireNodeMouseIn(_this);
+            }, function () {
+                return _this._tree.fireNodeMouseOut(_this);
+            });
             var $toggleWrapper = $('<div/>').appendTo($item).addClass('toggle-content-view');
             if(this._file.childCount > 0) {
                 $('<div/>').appendTo($toggleWrapper).addClass('btn').click(function (_) {
@@ -48,6 +52,11 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
             var $add = $('<div/>').appendTo($actions).addClass('add');
             var $remove = $('<div/>').appendTo($actions).addClass('remove');
             var $contents = $('<div/>').appendTo(this._$this).addClass('content');
+            if(this.nodes) {
+                for(var i = 0, node; node = this.nodes[i]; i++) {
+                    node.render();
+                }
+            }
         };
         FSTreeNode.prototype.toggle = function (cb) {
             if(this.isOpen) {
@@ -111,13 +120,12 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
                     }
                     nodes[i] = new FSTreeNode(response.result, _this._$this.children('.content'), _this._db, _this._env, _this._tree);
                 }
-                nodes = nodes.sort(function (a, b) {
+                _this.nodes = nodes.sort(function (a, b) {
                     return _this._compareFn(a, b);
                 });
-                for(var i = 0, node; node = nodes[i]; i++) {
+                for(var i = 0, node; node = _this.nodes[i]; i++) {
                     node.render();
                 }
-                _this.nodes = nodes;
                 cb && cb();
             });
         };
@@ -157,19 +165,54 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
         return FSTreeNode;
     })();    
     var FSTreeViewBGLayer = (function () {
-        function FSTreeViewBGLayer(parentSel) {
-            this._parentSel = parentSel;
+        function FSTreeViewBGLayer($parent) {
+            this._$parent = $parent;
             this._$this = null;
         }
+        FSTreeViewBGLayer._RX_ITEM_ID = /^bg-(.*)/;
         FSTreeViewBGLayer.prototype.render = function () {
             if(!this._$this) {
-                this._$this = $('<div/>').appendTo(this._parentSel);
+                this._$this = $('<div/>').addClass('bg-layer').prependTo(this._$parent);
+            }
+            this._$this.empty();
+            if(!this._items) {
+                return;
+            }
+            for(var i = 0, id; id = this._itemOrder[i]; i++) {
+                this._items[id].appendTo(this._$this);
             }
         };
-        FSTreeViewBGLayer.prototype.ensureItems = function (items) {
-            for(var i = 0, item; item = items[i]; i++) {
-                item.id;
+        FSTreeViewBGLayer.prototype.ensureItems = function (itemIds) {
+            var _this = this;
+            this._itemOrder = itemIds;
+            this._items = {
+            };
+            for(var i = 0, id; id = itemIds[i]; i++) {
+                this._items[id] = $('<div/>').attr('id', 'bg-' + id).hover(function (ev) {
+                    var match = FSTreeViewBGLayer._RX_ITEM_ID.exec((ev.target).id);
+                    if(match && match[1]) {
+                        _this.mouseOver(match[1]);
+                    }
+                }, function (ev) {
+                    var match = FSTreeViewBGLayer._RX_ITEM_ID.exec((ev.target).id);
+                    if(match && match[1]) {
+                        _this.mouseOut(match[1]);
+                    }
+                });
             }
+            this.render();
+        };
+        FSTreeViewBGLayer.prototype.mouseOver = function (itemId) {
+            this._items[itemId].addClass('hover');
+            $('#' + itemId).addClass('hover');
+        };
+        FSTreeViewBGLayer.prototype.mouseOut = function (itemId) {
+            this._items[itemId].removeClass('hover');
+            $('#' + itemId).removeClass('hover');
+        };
+        FSTreeViewBGLayer.prototype.select = function (itemId) {
+            this._selected.removeClass('selected');
+            this._selected = this._items[itemId].addClass('selected');
         };
         return FSTreeViewBGLayer;
     })();    
@@ -180,17 +223,31 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
             this._path = config.path || '/';
             this._env = config.environment || FSTreeView._DEFAULT_ENV;
             this._parentSel = config.parentSel;
-            this._bg = new FSTreeViewBGLayer(this._parentSel);
             this._treeChangeHandlers = [];
+            this._nodeMouseInHandlers = [];
+            this._nodeMouseOutHandlers = [];
+            this._nodeSelectHandlers = [];
             this.onTreeChange(function (sender) {
-                var items = [];
+                var itemIds = [];
                 _this.traverse(function (node) {
-                    items.push(node);
+                    itemIds.push(node.id);
                     return true;
                 });
-                _this._bg.ensureItems(items);
+                _this._bg.ensureItems(itemIds);
             });
-            this._openRoot();
+            this.onNodeSelect(function (sender) {
+                return _this._bg.select(sender.id);
+            });
+            this.onNodeHover(function (mouseInSender) {
+                return _this._bg.mouseOver(mouseInSender.id);
+            }, function (mouseOutSender) {
+                return _this._bg.mouseOut(mouseOutSender.id);
+            });
+            $(function () {
+                _this.render();
+                _this._bg = new FSTreeViewBGLayer(_this._$this);
+                _this._openRoot();
+            });
         }
         FSTreeView._DEFAULT_ENV = {
             log: function (any) {
@@ -200,21 +257,22 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
                 }
             }
         };
+        FSTreeView.prototype.render = function () {
+            if(!this._$this) {
+                this._$this = $('<div/>').addClass('tree-view').appendTo(this._parentSel);
+            }
+        };
         FSTreeView.prototype._openRoot = function () {
             var _this = this;
             async.newTask(function (cb) {
                 return _this._db.get(_this._path, cb);
-            }, function (cb) {
-                return $(cb);
-            }).done(function (dbResponseArgs, domReadyArgs) {
-                var response = dbResponseArgs[0];
+            }).done(function (response) {
                 if(!response.success) {
                     _this._env.log("Failed to open FS root (tree-view.ts:FSTreeView:constructor)");
                 }
-                var root = new FSTreeNode(response.result, $(_this._parentSel), _this._db, _this._env, _this);
-                _this._root = root;
-                root.render();
-                root.open();
+                _this._root = new FSTreeNode(response.result, _this._$this, _this._db, _this._env, _this);
+                _this._root.render();
+                _this._root.open();
             });
         };
         FSTreeView.prototype.traverse = function (fn) {
@@ -229,15 +287,34 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
             }
         };
         FSTreeView.prototype.fireTreeChange = function (sender) {
-            if(!this._treeChangeHandlers) {
-                return;
-            }
             for(var i = 0, handler; handler = this._treeChangeHandlers[i]; i++) {
+                handler(sender);
+            }
+        };
+        FSTreeView.prototype.fireNodeSelect = function (sender) {
+            for(var i = 0, handler; handler = this._nodeSelectHandlers[i]; i++) {
+                handler(sender);
+            }
+        };
+        FSTreeView.prototype.fireNodeMouseIn = function (sender) {
+            for(var i = 0, handler; handler = this._nodeMouseInHandlers[i]; i++) {
+                handler(sender);
+            }
+        };
+        FSTreeView.prototype.fireNodeMouseOut = function (sender) {
+            for(var i = 0, handler; handler = this._nodeMouseOutHandlers[i]; i++) {
                 handler(sender);
             }
         };
         FSTreeView.prototype.onTreeChange = function (handler) {
             this._treeChangeHandlers.push(handler);
+        };
+        FSTreeView.prototype.onNodeHover = function (mouseIn, mouseOut) {
+            this._nodeMouseInHandlers.push(mouseIn);
+            this._nodeMouseOutHandlers.push(mouseOut);
+        };
+        FSTreeView.prototype.onNodeSelect = function (handler) {
+            this._nodeSelectHandlers.push(handler);
         };
         return FSTreeView;
     })();

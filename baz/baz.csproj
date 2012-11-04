@@ -3649,6 +3649,7 @@
   <ItemGroup>
     <TypeScriptCompile Include="tree-view-obsolete.ts" />
     <TypeScriptCompile Include="tree-view.d.ts" />
+    <Content Include="tree-view.css" />
     <Content Include="tree-view.d.js">
       <DependentUpon>tree-view.d.ts</DependentUpon>
     </Content>

@@ -28,11 +28,11 @@ class FSTreeNode implements IFSTreeNode {
         })();
 
     constructor(
-        file                : IFile,
-        $parent             : JQuery,
-        db                  : IFileDb, 
-        environment         : IEnvironment,
-        tree                : FSTreeView
+        file            : IFile,
+        $parent         : JQuery,
+        db              : IFileDb, 
+        environment     : IEnvironment,
+        tree            : FSTreeView
     ) {
         this._db        = db;
         this._env       = environment;
@@ -55,7 +55,11 @@ class FSTreeNode implements IFSTreeNode {
         var $item = $('<div/>')
             .appendTo(this._$this)
             .addClass(this._getMimeClass() + " item")
-            .attr('id', this.id);
+            .attr('id', this.id)
+            .hover(
+                () => this._tree.fireNodeMouseIn(this),
+                () => this._tree.fireNodeMouseOut(this)
+            );
 
         var $toggleWrapper  = $('<div/>').appendTo($item).addClass('toggle-content-view');
 
@@ -63,15 +67,21 @@ class FSTreeNode implements IFSTreeNode {
             $('<div/>').appendTo($toggleWrapper).addClass('btn').click( _ => this.toggle() );
         }
 
-        var $icon           = $('<div/>').appendTo($item).addClass('icon');
-        var $name           = $('<div/>').appendTo($item).addClass('name').text(this._file.name);
+        var $icon = $('<div/>').appendTo($item).addClass('icon');
+        var $name = $('<div/>').appendTo($item).addClass('name').text(this._file.name);
 
-        var $actions        = $('<div/>').appendTo($item).addClass('actions');
-        var $refresh        = $('<div/>').appendTo($actions).addClass('refresh').click( _ => this.refresh() );
-        var $add            = $('<div/>').appendTo($actions).addClass('add');
-        var $remove         = $('<div/>').appendTo($actions).addClass('remove');
+        var $actions = $('<div/>').appendTo($item).addClass('actions');
+        var $refresh = $('<div/>').appendTo($actions).addClass('refresh').click( _ => this.refresh() );
+        var $add     = $('<div/>').appendTo($actions).addClass('add');
+        var $remove  = $('<div/>').appendTo($actions).addClass('remove');
 
         var $contents       = $('<div/>').appendTo(this._$this).addClass('content');
+
+        if (this.nodes) {
+            for (var i = 0, node : IFSTreeNode; node = this.nodes[i]; i++) {
+                node.render();
+            }
+        }
     }
 
     toggle(cb? : ICallback) {
@@ -150,15 +160,14 @@ class FSTreeNode implements IFSTreeNode {
                         );
                     }
 
-                    nodes = nodes.sort(
+                    this.nodes = nodes.sort(
                         (a : FSTreeNode, b : FSTreeNode) => this._compareFn(a, b)
                     );
 
-                    for (var i = 0, node : FSTreeNode; node = nodes[i]; i++) {
+                    for (var i = 0, node : IFSTreeNode; node = this.nodes[i]; i++) {
                         node.render();
                     }
 
-                    this.nodes = nodes;
                     cb && cb();
                 }
             );
@@ -206,24 +215,74 @@ class FSTreeNode implements IFSTreeNode {
 }
 
 class FSTreeViewBGLayer implements IFSTreeViewBGLayer {
-    private _parentSel  : string;
-    private _$this      : JQuery;
+    private static _RX_ITEM_ID = /^bg-(.*)/;
 
-    constructor(parentSel : string) {
-        this._parentSel = parentSel;
+    private _$parent    : JQuery;
+    private _$this      : JQuery;
+    private _items      : { [ id : string ] : JQuery; };
+    private _itemOrder  : string[];
+    private _selected   : JQuery;
+
+    constructor($parent : JQuery) {
+        this._$parent   = $parent;
         this._$this     = null;
     }
 
     render() {
         if (!this._$this) {
-            this._$this = $('<div/>').appendTo(this._parentSel);
+            this._$this = $('<div/>').addClass('bg-layer').prependTo(this._$parent);
+        }
+
+        this._$this.empty();
+
+        if (!this._items) {
+            return;
+        }
+
+        for (var i = 0, id : string; id = this._itemOrder[i]; i++) {
+            this._items[id].appendTo(this._$this);
         }
     }
 
-    ensureItems(items : IFSTreeNode[]) : void {
-        for (var i = 0, item : IFSTreeNode; item = items[i]; i++) {
-            item.id
+    ensureItems(itemIds : string[]) : void {
+        this._itemOrder = itemIds;
+        this._items = { };
+
+        for (var i = 0, id; id = itemIds[i]; i++) {
+            this._items[id] = $('<div/>')
+                .attr('id', 'bg-' + id)
+                .hover(
+                    (ev) => { 
+                        var match = FSTreeViewBGLayer._RX_ITEM_ID.exec((<any>ev.target).id);
+                        if (match && match[1]) {
+                            this.mouseOver(match[1]);
+                        }
+                    },
+                    (ev) => {
+                        var match = FSTreeViewBGLayer._RX_ITEM_ID.exec((<any>ev.target).id);
+                        if (match && match[1]) {
+                            this.mouseOut(match[1]);
+                        }
+                    }
+                );
         }
+
+        this.render();
+    }
+
+    mouseOver(itemId) {
+        this._items[itemId].addClass('hover');
+        $('#' + itemId).addClass('hover');
+    }
+
+    mouseOut(itemId) {
+        this._items[itemId].removeClass('hover');
+        $('#' + itemId).removeClass('hover');
+    }
+
+    select(itemId) {
+        this._selected.removeClass('selected');
+        this._selected = this._items[itemId].addClass('selected');
     }
 }
 
@@ -236,56 +295,73 @@ export class FSTreeView implements IFSTreeView {
     private _path       : string;
     private _bg         : IFSTreeViewBGLayer;
     private _parentSel  : string;
+    private _$this      : JQuery;
 
-    private _treeChangeHandlers : IFSTreeViewEventHandler[];
+    private _treeChangeHandlers     : IFSTreeViewEventHandler[];
+    private _nodeSelectHandlers     : IFSTreeViewEventHandler[];
+    private _nodeMouseInHandlers    : IFSTreeViewEventHandler[];
+    private _nodeMouseOutHandlers   : IFSTreeViewEventHandler[];
 
     constructor(config : IFSTreeConfig) {
         this._db            = config.db;
         this._path          = config.path           || '/';
         this._env           = config.environment    || FSTreeView._DEFAULT_ENV;
         this._parentSel     = config.parentSel;
-        this._bg            = new FSTreeViewBGLayer(this._parentSel);
 
-        this._treeChangeHandlers = [];
+        this._treeChangeHandlers    = [];
+        this._nodeMouseInHandlers   = [];
+        this._nodeMouseOutHandlers  = [];
+        this._nodeSelectHandlers    = [];
 
         this.onTreeChange((sender : IFSTreeNode) => {
-            var items : IFSTreeNode[] = [];
+            var itemIds : string[] = [];
             this.traverse((node : IFSTreeNode) => {
-                items.push(node);
+                itemIds.push(node.id);
                 return true;
             });
-            this._bg.ensureItems(items);
+            this._bg.ensureItems(itemIds);
         });
 
-        this._openRoot();
+        this.onNodeSelect((sender : IFSTreeNode) => this._bg.select(sender.id));
+
+        this.onNodeHover(
+            (mouseInSender  : IFSTreeNode) => this._bg.mouseOver(mouseInSender.id), 
+            (mouseOutSender : IFSTreeNode) => this._bg.mouseOut(mouseOutSender.id)
+        );
+
+        $(() => {
+            this.render();
+            this._bg = new FSTreeViewBGLayer(this._$this);
+            this._openRoot();
+        });
+    }
+
+    render() {
+        if (!this._$this) {
+            this._$this = $('<div/>').addClass('tree-view').appendTo(this._parentSel);
+        }
     }
 
     private _openRoot() {
         async
-            .newTask(
-                cb => this._db.get(this._path, cb),
-                cb => $(cb)
-            )
-            .done((dbResponseArgs, domReadyArgs) => {
-                var response : IResponse = dbResponseArgs[0];
-
+            .newTask(cb => this._db.get(this._path, cb))
+            .done((response : IResponse) => {
                 if (!response.success) {
                     this._env.log(
                         "Failed to open FS root (tree-view.ts:FSTreeView:constructor)"
                     );
                 }
 
-                var root = new FSTreeNode(
+                this._root = new FSTreeNode(
                     response.result, 
-                    $(this._parentSel), 
+                    this._$this, 
                     this._db, 
                     this._env,
                     this
                 );
                 
-                this._root = root;
-                root.render();
-                root.open();
+                this._root.render();
+                this._root.open();
             }
         );
     }
@@ -305,16 +381,39 @@ export class FSTreeView implements IFSTreeView {
     }
 
     fireTreeChange(sender : IFSTreeNode) {
-        if (!this._treeChangeHandlers) {
-            return;
-        }
-
         for (var i = 0, handler; handler = this._treeChangeHandlers[i]; i++) {
+            handler(sender);
+        }
+    }
+
+    fireNodeSelect(sender : IFSTreeNode) {
+        for (var i = 0, handler; handler = this._nodeSelectHandlers[i]; i++) {
+            handler(sender);
+        }
+    }
+
+    fireNodeMouseIn(sender : IFSTreeNode) {
+        for (var i = 0, handler; handler = this._nodeMouseInHandlers[i]; i++) {
+            handler(sender);
+        }
+    }
+
+    fireNodeMouseOut(sender : IFSTreeNode) {
+        for (var i = 0, handler; handler = this._nodeMouseOutHandlers[i]; i++) {
             handler(sender);
         }
     }
 
     onTreeChange(handler : IFSTreeViewEventHandler) {
         this._treeChangeHandlers.push(handler);
+    }
+
+    onNodeHover(mouseIn : IFSTreeViewEventHandler, mouseOut : IFSTreeViewEventHandler) {
+        this._nodeMouseInHandlers.push(mouseIn);
+        this._nodeMouseOutHandlers.push(mouseOut);
+    }
+
+    onNodeSelect(handler: IFSTreeViewEventHandler) {
+        this._nodeSelectHandlers.push(handler);
     }
 }
