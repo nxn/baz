@@ -4,33 +4,22 @@
 ; position: relative
 }
 
-.tree-view .bg-layer
-{ position: absolute
-; top: 0px
-; bottom: 0px
-; left: 0px
-; right: 0px
-}
-
-.tree-view .bg-layer > div
-{ height: 20px
-}
-
-.tree-view .bg-layer > div.hover
-{ background-color: #fafafa
-}
-
-.tree-view .node .item
+.tree-view .node .item-container *
 { overflow: hidden
 ; height: 20px
 ; line-height: 20px
-; position: relative
 }
 
-.tree-view .node .item > div
+
+.tree-view .node .item-container:hover
+{ background-color: #fafafa
+}
+.tree-view .node .item-container .item
+{ position: relative
+}
+.tree-view .node .item-container .item > div
 { position: absolute
 ; top: 0px
-; height: 20px
 }
   .tree-view .node .item .toggle-content-view
 , .tree-view .node .item .toggle-content-view .btn
@@ -46,10 +35,10 @@
 .tree-view .item .toggle-content-view .btn:hover
 { background-image: url(img/closed-hover.png)
 }
-.tree-view .open > .item > .toggle-content-view > .btn
+.tree-view .open > .item-container .toggle-content-view .btn
 { background-image: url(img/open.png)
 }
-.tree-view .open > .item > .toggle-content-view > .btn:hover
+.tree-view .open > .item-container .toggle-content-view .btn:hover
 { background-image: url(img/open-hover.png)
 }
 .tree-view .item .icon
@@ -76,11 +65,11 @@
 ; left: 40px
 ; right: 0px
 }
-.tree-view .item.hover .name
+.tree-view .item-container:hover .name
 { right: 60px
 }
 .tree-view .node .content
-{ padding-left: 20px
+{
 }
 .tree-view .item .actions 
 { height: 20px
@@ -91,7 +80,7 @@
 ; background-repeat: no-repeat
 ; background-position: 0px 50%
 }
-.tree-view .item.hover > .actions
+.tree-view .item-container:hover .actions
 { display: block !important
 }
 .tree-view .item .actions div

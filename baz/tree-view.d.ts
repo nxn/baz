@@ -6,6 +6,7 @@ interface IFSTreeConfig {
     environment     : IEnvironment;
     parentSel       : string;
     path            : string;
+    indentAmount?   : number;
 }
 
 interface IFSTreeNode {
@@ -24,6 +25,7 @@ interface IFSTreeViewEventHandler {
 }
 
 interface IFSTreeView {
+    indentAmount : number;
     render()                                        : void;
     traverse(fn : (node : IFSTreeNode) => bool)     : void;
     onTreeChange(handler : IFSTreeViewEventHandler) : void;
