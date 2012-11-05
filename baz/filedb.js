@@ -293,7 +293,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                 return _this._env.log('\t\tSUCCESS: Removed reference "%s" from parent "%s".', pathInfo.name, pathInfo.location);
             });
         };
-        FileDb.prototype._traverseWithAction = function (root, action, transaction) {
+        FileDb.prototype._traverseWithAction = function (transaction, root, action) {
             var _this = this;
             root.forEachChild(function (c) {
                 return transaction.objectStore(FileDb._FILE_STORE).get(FileUtils.getAbsolutePath({
@@ -302,11 +302,47 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                 })).onsuccess = (function (ev) {
                     var result = (ev.target).result;
                     if(result) {
-                        _this._traverseWithAction(new File(result), action, transaction);
+                        _this._traverseWithAction(transaction, new File(result), action);
                     }
                 });
             });
             action(root);
+        };
+        FileDb.prototype._copy = function (source, destination, transaction) {
+            var _this = this;
+            return async.newTask(function (cb) {
+                transaction.objectStore(FileDb._FILE_STORE).get(source).onsuccess = function (ev) {
+                    var result = (ev.target).result;
+                    if(typeof (result) === 'undefined') {
+                        (ev.target).transaction.abort();
+                        return;
+                    }
+                    cb(result);
+                };
+            }).next(function (fileData) {
+                var root = new File(fileData);
+                return function (cb) {
+                    return _this._traverseWithAction(transaction, root, function (file) {
+                        var isRoot = file.absolutePath === root.absolutePath;
+                        var oldFilePath = file.absolutePath;
+                        var newPathInfo = null;
+
+                        if(isRoot) {
+                            newPathInfo = FileUtils.getPathInfo(destination);
+                        } else {
+                            newPathInfo = FileUtils.getPathInfo(oldFilePath.replace(source, destination));
+                        }
+                        file.name = newPathInfo.name;
+                        file.location = newPathInfo.location;
+                        if(isRoot) {
+                            _this._addChildReferenceFor(file, transaction);
+                        }
+                        transaction.objectStore(FileDb._FILE_STORE).add(file.getStoreObject()).onsuccess = function (ev) {
+                            return cb(oldFilePath, file.absolutePath, transaction);
+                        };
+                    });
+                }
+            });
         };
         FileDb.prototype.read = function (absolutePath, cb) {
             var _this = this;
@@ -375,13 +411,13 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                     '".'
                 ].join('')
             };
-            this._getTransaction(transactionConfig, cb).done(function (transaction) {
+            this._getTransaction(transactionConfig, cb).next(function (transaction) {
                 _this._addChildReferenceFor(file, transaction);
-                async.newTask(function (cb) {
+                return function (cb) {
                     return transaction.objectStore(FileDb._FILE_STORE).put(file.getStoreObject()).onsuccess = cb;
-                }).done(function () {
-                    return _this._env.log('\t\tSUCCESS: Saved "%s" to database "%s".', file.absolutePath, _this.name);
-                });
+                }
+            }).done(function () {
+                return _this._env.log('\t\tSUCCESS: Saved "%s" to database "%s".', file.absolutePath, _this.name);
             });
         };
         FileDb.prototype.remove = function (absolutePath, cb) {
@@ -415,65 +451,28 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                     '".'
                 ].join('')
             };
-            this._getTransaction(transactionConfig, cb).done(function (transaction) {
+            this._getTransaction(transactionConfig, cb).next(function (transaction) {
                 _this._removeChildReferenceFor(absolutePath, transaction);
-                async.newTask(function (cb) {
+                return function (cb) {
                     return transaction.objectStore(FileDb._FILE_STORE).get(absolutePath).onsuccess = function (ev) {
                         var result = (ev.target).result;
                         if(typeof (result) === 'undefined') {
                             (ev.target).transaction.abort();
                         } else {
-                            cb(result);
+                            cb(new File(result), transaction);
                         }
                     };
-                }).next(function (itemData) {
-                    var item = new File(itemData);
-                    return function (cb) {
-                        return _this._traverseWithAction(item, function (child) {
-                            transaction.objectStore(FileDb._FILE_STORE).delete(child.absolutePath).onsuccess = function (ev) {
-                                return cb(child);
-                            };
-                        }, transaction);
-                    }
-                }).done(function (child) {
-                    return _this._env.log('\t\tSUCCESS: Removing item "%s" from database "%s".', child.absolutePath, _this.name);
-                });
-            });
-        };
-        FileDb.prototype._copy = function (source, destination, transaction) {
-            var _this = this;
-            return async.newTask(function (cb) {
-                transaction.objectStore(FileDb._FILE_STORE).get(source).onsuccess = function (ev) {
-                    var result = (ev.target).result;
-                    if(typeof (result) === 'undefined') {
-                        (ev.target).transaction.abort();
-                        return;
-                    }
-                    cb(result);
-                };
-            }).next(function (fileData) {
-                var root = new File(fileData);
-                return function (cb) {
-                    return _this._traverseWithAction(root, function (file) {
-                        var isRoot = file.absolutePath === root.absolutePath;
-                        var oldFilePath = file.absolutePath;
-                        var newPathInfo = null;
-
-                        if(isRoot) {
-                            newPathInfo = FileUtils.getPathInfo(destination);
-                        } else {
-                            newPathInfo = FileUtils.getPathInfo(oldFilePath.replace(source, destination));
-                        }
-                        file.name = newPathInfo.name;
-                        file.location = newPathInfo.location;
-                        if(isRoot) {
-                            _this._addChildReferenceFor(file, transaction);
-                        }
-                        transaction.objectStore(FileDb._FILE_STORE).add(file.getStoreObject()).onsuccess = function (ev) {
-                            return cb(oldFilePath, file.absolutePath, transaction);
-                        };
-                    }, transaction);
                 }
+            }).next(function (root, transaction) {
+                return function (cb) {
+                    return _this._traverseWithAction(transaction, root, function (child) {
+                        return transaction.objectStore(FileDb._FILE_STORE).delete(child.absolutePath).onsuccess = function (ev) {
+                            return cb(child.absolutePath);
+                        };
+                    });
+                }
+            }).done(function (path) {
+                return _this._env.log('\t\tSUCCESS: Removing item "%s" from database "%s".', path, _this.name);
             });
         };
         FileDb.prototype.copy = function (source, destination, cb) {
