@@ -131,7 +131,7 @@ class FSTreeNode implements IFSTreeNode {
 
         this._file.forEachChild((child : IChildInfo) => {
             asyncOps[i++] = (cb =>
-                this._db.get(
+                this._db.read(
                     this._db.utils.getAbsolutePath({
                         name    : child.name,
                         location: this._file.absolutePath
@@ -264,7 +264,7 @@ export class FSTreeView implements IFSTreeView {
 
     private _openRoot() {
         async
-            .newTask(cb => this._db.get(this._path, cb))
+            .newTask(cb => this._db.read(this._path, cb))
             .done((response : IResponse) => {
                 if (!response.success) {
                     this._env.log(

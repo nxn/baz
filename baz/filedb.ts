@@ -140,8 +140,16 @@ module FileUtils {
     }
 }
 
+interface ITransactionConfig {
+    mode?       : string;
+    errorMsg    : string;
+    abortMsg    : string;
+    successMsg  : string;
+}
+
 class FileDb implements IFileDb {
     private static _OPEN_DBS                    : { [dbName : string] : IDBDatabase; } = { };
+    private static _NOOP                        = () => {};
     private static _INDEXEDDB                   = window.indexedDB;
     private static _FILE_STORE                  = "files";
     private static _FILE_STORE_KEY              = "absolutePath";
@@ -166,46 +174,6 @@ class FileDb implements IFileDb {
         this._name      = config.name;
         this._version   = config.version        || FileDb._CURRENT_DB_VERSION;
         this._env       = config.environment    || FileDb._DEFAULT_ENV;
-    }
-
-    private _getDb() {
-        return async.newTask(cb => {
-            if (FileDb._OPEN_DBS.hasOwnProperty(this.name)) {
-                cb(FileDb._OPEN_DBS[this.name]);
-                return;
-            }
-
-            this._env.log('Opening database "%s", version "%d"...', this.name, this.version);
-            var request = FileDb._INDEXEDDB.open(this.name, this.version);
-
-            request.onsuccess = (ev) => {
-                var result : IDBDatabase = request.result;
-
-                this._env.log('\tSUCCESS: Opened database "%s", version "%d".', result.name, result.version);
-                FileDb._OPEN_DBS[this.name] = result;
-                cb(result);
-            }
-
-            request.onerror = (ev) => {
-                this._env.log("Unhandled error: ", request.error);
-            }
-
-            request.onupgradeneeded = (ev) => {
-                var db = <IDBDatabase> request.result;
-                this._env.log(
-                    'Upgrade needed for database "%s", version "%d". Current Version: "%d".',
-                    db.name,
-                    db.version,
-                    FileDb._CURRENT_DB_VERSION
-                );
-
-                switch(db.version) {
-                    default: 
-                        this._initDb(db);
-                        break;
-                }
-            }
-        });
     }
 
     private _initDb(db : IDBDatabase) {
@@ -240,12 +208,168 @@ class FileDb implements IFileDb {
             };
     }
 
-    get(absolutePath : string, cb : (IResponse) => any) {
+    private _openDb() {
+        return async.newTask(cb => {
+            if (FileDb._OPEN_DBS.hasOwnProperty(this.name)) {
+                cb(FileDb._OPEN_DBS[this.name]);
+                return;
+            }
+
+            this._env.log('Opening database "%s", version "%d"...', this.name, this.version);
+            var request = FileDb._INDEXEDDB.open(this.name, this.version);
+
+            request.onsuccess = (ev) => {
+                var result : IDBDatabase = request.result;
+
+                this._env.log('\tSUCCESS: Opened database "%s", version "%d".', result.name, result.version);
+                FileDb._OPEN_DBS[this.name] = result;
+                cb(result);
+            }
+
+            request.onerror = (ev) => {
+                this._env.log("Unhandled error: ", (<any> ev.target).error);
+            }
+
+            request.onupgradeneeded = (ev) => {
+                var db = <IDBDatabase> request.result;
+                this._env.log(
+                    'Upgrade needed for database "%s", version "%d". Current Version: "%d".',
+                    db.name,
+                    db.version,
+                    FileDb._CURRENT_DB_VERSION
+                );
+
+                switch(db.version) {
+                    default: 
+                        this._initDb(db);
+                        break;
+                }
+            }
+        });
+    }
+
+    private _getTransaction(config : ITransactionConfig, cb : (IResponse) => any) {
+        return this._openDb().next((db : IDBDatabase) => {
+            var transaction = db.transaction(FileDb._FILE_STORE, config.mode || FileDb._READ_ONLY);
+
+            transaction.onerror = (ev) => {
+                this._env.log(config.errorMsg);
+                cb({ success: false, error: (<any> ev.target).error });
+            }
+
+            transaction.onabort = (ev) => {
+                this._env.log(config.abortMsg);
+                cb({ success: false, error: (<any> ev.target).error });
+            }
+
+            transaction.oncomplete = (ev) => {
+                this._env.log(config.successMsg);
+                cb({ success: true, result: (<any> ev.target).result });
+            }
+
+            return cb => cb(transaction);
+        });
+    }
+
+    private _addChildReferenceFor(file : IFile, transaction : IDBTransaction) {
+        async.newTask(cb =>
+            transaction
+                .objectStore(FileDb._FILE_STORE)
+                .get(file.location)
+                .onsuccess = (ev) => {
+                    var result = (<any> ev.target).result;
+
+                    if (typeof result === 'undefined') {
+                        (<any> ev.target).transaction.abort();
+                        return;
+                    }
+
+                    cb(result);
+                }
+        ).next((parentData : IFileData) => {
+            var parent = new File(parentData);
+            parent.addChild(file);
+
+            return cb => transaction
+                .objectStore(FileDb._FILE_STORE)
+                .put(parent.getStoreObject())
+                .onsuccess = cb;
+        }).done(() =>
+            this._env.log(
+                '\t\tSUCCESS: Added reference "%s" to parent "%s".',
+                file.name,
+                file.location
+            )
+        );
+    }
+
+    private _removeChildReferenceFor(absolutePath : string, transaction : IDBTransaction) {
+        var pathInfo = FileUtils.getPathInfo(absolutePath);
+
+        async.newTask(cb => 
+            transaction
+                .objectStore(FileDb._FILE_STORE)
+                .get(pathInfo.location)
+                .onsuccess = (ev) => {
+                    var result = (<any> ev.target).result;
+
+                    if (typeof(result) === 'undefined') {
+                        (<any> ev.target).transaction.abort();
+                        return;
+                    }
+
+                    cb(result);
+                }
+        ).next((parentData : IFileData) => {
+            var parent = new File(parentData);
+
+            parent.removeChild(pathInfo.name);
+
+            return cb => transaction
+                .objectStore(FileDb._FILE_STORE)
+                .put(parent.getStoreObject())
+                .onsuccess = cb;
+            }
+        ).done(() =>
+            this._env.log(
+                '\t\tSUCCESS: Removed reference "%s" from parent "%s".',
+                pathInfo.name,
+                pathInfo.location
+            )
+        );
+    }
+
+    private _traverseWithAction(
+        root        : IFile, 
+        action      : (file : IFile) => void,
+        transaction : IDBTransaction
+    ) {
+        root.forEachChild(c => 
+            transaction
+                .objectStore(FileDb._FILE_STORE)
+                .get(
+                    FileUtils.getAbsolutePath({ 
+                        name    : c.name, 
+                        location: root.absolutePath
+                    })
+                ).onsuccess = (ev => {
+                    var result : IFileData = (<any> ev.target).result;
+
+                    if (result) {
+                        this._traverseWithAction(new File(result), action, transaction);
+                    }
+                })
+        );
+
+        action(root);
+    }
+
+    read(absolutePath : string, cb : (IResponse) => any) {
         absolutePath = FileUtils.normalizePath(absolutePath);
 
         this._env.log('Getting "%s" from database "%s"...', absolutePath, this.name);
 
-        this._getDb().done((db : IDBDatabase) => {
+        this._openDb().done((db : IDBDatabase) => {
             var request = db.transaction(FileDb._FILE_STORE, FileDb._READ_ONLY)
                             .objectStore(FileDb._FILE_STORE)
                             .get(absolutePath);
@@ -262,65 +386,25 @@ class FileDb implements IFileDb {
         });
     }
 
-    put(fileData : IFileData, cb : (IResponse) => any) {
+    save(fileData : IFileData, cb? : (IResponse) => any) {
+        if (!cb) {
+            cb = FileDb._NOOP;
+        }
+
         var file = new File(fileData);
 
         this._env.log('Saving "%s" to database "%s"...', file.absolutePath, this.name);
-        this._getDb().done((db : IDBDatabase) => {
-            var transaction = db.transaction(FileDb._FILE_STORE, FileDb._READ_WRITE);
 
-            transaction.onerror = (ev) => {
-                this._env.log('\tFAILURE: Could not save "%s" to database "%s".', file.absolutePath, this.name);
-                cb({ success: false, error: (<any> ev.target).error });
-            }
+        var transactionConfig : ITransactionConfig = {
+            mode        : FileDb._READ_WRITE,
+            successMsg  : ['\tSUCCESS: Transaction for saving "', file.absolutePath, '" to database "', this.name, '" completed.'].join(''),
+            abortMsg    : ['\tFAILURE: Transaction aborted while saving "', file.absolutePath, '" to database "', this.name, '".'].join(''),
+            errorMsg    : ['\tFAILURE: Could not save "', file.absolutePath, '" to database "', this.name, '".'].join('')
+        };
 
-            transaction.onabort = (ev) => {
-                this._env.log(
-                    '\tFAILURE: Transaction aborted while saving "%s" to database "%s".',
-                    file.absolutePath,
-                    this.name
-                );
-                cb({ success: false, error: (<any> ev.target).error });
-            }
+        this._getTransaction(transactionConfig, cb).done((transaction : IDBTransaction) => {
 
-            transaction.oncomplete = (ev) => {
-                this._env.log(
-                    '\tSUCCESS: Transaction for saving "%s" to database "%s" completed.', 
-                    file.absolutePath, 
-                    this.name
-                );
-                cb({ success: true, result: (<any> ev.target).result });
-            }
-
-            async.newTask(cb =>
-                transaction
-                    .objectStore(FileDb._FILE_STORE)
-                    .get(file.location)
-                    .onsuccess = (ev) => {
-                        var result = (<any> ev.target).result;
-
-                        if (typeof result === 'undefined') {
-                            (<any> ev.target).transaction.abort();
-                            return;
-                        }
-
-                        cb(result);
-                    }
-            ).next((parentData : IFileData) => {
-                var parent = new File(parentData);
-                parent.addChild(file);
-
-                return cb => transaction
-                    .objectStore(FileDb._FILE_STORE)
-                    .put(parent.getStoreObject())
-                    .onsuccess = cb;
-            }).done(() =>
-                this._env.log(
-                    '\t\tSUCCESS: Added reference "%s" to parent "%s".',
-                    file.name,
-                    file.location
-                )
-            );
+            this._addChildReferenceFor(file, transaction);
 
             async.newTask(cb =>
                 transaction
@@ -333,69 +417,25 @@ class FileDb implements IFileDb {
         });
     }
 
-    del(absolutePath : string, cb : (IResponse) => any) {
+    remove(absolutePath : string, cb? : (IResponse) => any) {
+        if (!cb) {
+            cb = FileDb._NOOP;
+        }
+
         absolutePath = FileUtils.normalizePath(absolutePath);
 
         this._env.log('Removing "%s" from database "%s"...', absolutePath, this.name);
-        var pathInfo = FileUtils.getPathInfo(absolutePath);
 
-        this._getDb().done((db : IDBDatabase) => {
-            var transaction = db.transaction(FileDb._FILE_STORE, FileDb._READ_WRITE);
+        var transactionConfig : ITransactionConfig = {
+            mode        : FileDb._READ_WRITE,
+            successMsg  : ['\tSUCCESS: Transaction for removal of "', absolutePath, '" from database "', this.name, '" completed.'].join(''),
+            errorMsg    : ['\tFAILURE: Could not remove "', absolutePath, '" from database "', this.name, '".'].join(''),
+            abortMsg    : ['\tFAILURE: Transaction aborted while deleting "', absolutePath, '" from database "', this.name, '".'].join('')
+        };
 
-            transaction.onerror = (ev) => {
-                this._env.log('\tFAILURE: Could not remove "%s" from database "%s".', absolutePath, this.name);
-                cb({ success: false, error: (<any> ev.target).error });
-            }
+        this._getTransaction(transactionConfig, cb).done((transaction : IDBTransaction) => {
 
-            transaction.onabort = (ev) => {
-                this._env.log(
-                    '\tFAILURE: Transaction aborted while deleting "%s" from database "%s".',
-                    absolutePath,
-                    this.name
-                );
-                cb({ success: false, error: (<any> ev.target).error });
-            }
-
-            transaction.oncomplete = (ev) => {
-                this._env.log(
-                    '\tSUCCESS: Transaction for removal of "%s" from database "%s" completed.',
-                        absolutePath, 
-                        this.name
-                );
-                cb({ success: true, result: (<any> ev.target).result });
-            }
-
-            async.newTask(cb => 
-                transaction
-                    .objectStore(FileDb._FILE_STORE)
-                    .get(pathInfo.location)
-                    .onsuccess = (ev) => {
-                        var result = (<any> ev.target).result;
-
-                        if (typeof(result) === 'undefined') {
-                            (<any> ev.target).transaction.abort();
-                            return;
-                        }
-
-                        cb(result);
-                    }
-            ).next((parentData : IFileData) => {
-                var parent = new File(parentData);
-
-                parent.removeChild(pathInfo.name);
-
-                return cb => transaction
-                    .objectStore(FileDb._FILE_STORE)
-                    .put(parent.getStoreObject())
-                    .onsuccess = cb;
-                }
-            ).done(() =>
-                this._env.log(
-                    '\t\tSUCCESS: Removed reference "%s" from parent "%s".',
-                    pathInfo.name,
-                    pathInfo.location
-                )
-            );
+            this._removeChildReferenceFor(absolutePath, transaction);
 
             async.newTask(cb => 
                 transaction
@@ -431,35 +471,90 @@ class FileDb implements IFileDb {
                     this.name
                 )
             );
-                                
         });
     }
 
-    private _traverseWithAction(
-        root        : IFile, 
-        action      : (file : IFile) => void,
-        transaction : IDBTransaction
-    ) {
-        root.forEachChild(c => 
-            transaction
-                .objectStore(FileDb._FILE_STORE)
-                .get(
-                    FileUtils.getAbsolutePath({ 
-                        name: c.name, 
-                        location: FileUtils.getAbsolutePath(root)
-                    })
-                ).onsuccess = (ev => {
-                    var result : IFileData = (<any> ev.target).result;
+    copy(fromPath : string, toPath : string, cb? : (IResponse) => any) {
+        if (!cb) {
+            cb = FileDb._NOOP;
+        }
 
-                    if (result) {
-                        var file = new File(result);
-                        this._traverseWithAction(file, action, transaction);
-                        action(file);
+        fromPath = FileUtils.normalizePath(fromPath);
+        toPath   = FileUtils.normalizePath(toPath);
+
+        var transactionConfig : ITransactionConfig = {
+            mode        : FileDb._READ_WRITE,
+            successMsg  : ['\tSUCCESS: Transaction for copying "', fromPath, '" to "', toPath, '" in database "', this.name, '" completed.'].join(''),
+            errorMsg    : ['\tFAILURE: Could not copy "', fromPath, '" to "', toPath, '" in database "', this.name, '".'].join(''),
+            abortMsg    : ['\tFAILURE: Transaction aborted while copying "', fromPath, '" to "', toPath, '" in database "', this.name, '".'].join('')
+        };
+
+        this._getTransaction(transactionConfig, cb).done((transaction : IDBTransaction) => {
+
+            async.newTask(cb => {
+                transaction
+                    .objectStore(FileDb._FILE_STORE)
+                    .get(fromPath)
+                    .onsuccess = (ev) => {
+                        var result = (<any> ev.target).result;
+
+                        if (typeof(result) === 'undefined') {
+                            (<any> ev.target).transaction.abort();
+                            return;
+                        }
+
+                        cb(result);
                     }
-                })
-        );
+            }).done((fileData : IFileData) => {
+                var root = new File(fileData);
 
-        action(root);
+                this._traverseWithAction(root, (file : IFile) => {
+                    var isRoot = file.absolutePath === root.absolutePath
+                      , oldFilePath = file.absolutePath
+                      , newPathInfo = null;
+
+                    if (isRoot) {
+                        newPathInfo = FileUtils.getPathInfo(toPath);
+                    }
+                    else {
+                        newPathInfo = FileUtils.getPathInfo(oldFilePath.replace(fromPath, toPath));
+                    }
+
+                    file.name      = newPathInfo.name;
+                    file.location  = newPathInfo.location;
+
+                    if (isRoot) {
+                        this._addChildReferenceFor(file, transaction);
+                    }
+
+                    transaction
+                        .objectStore(FileDb._FILE_STORE)
+                        .put(file.getStoreObject())
+                        .onsuccess = ev => {
+                            this._env.log('\t\tSUCCESS: Copied "%s" to "%s".', oldFilePath, file.absolutePath);
+                        }
+                }, transaction);
+            });
+        });
+    }
+
+    move(fromPath : string, toPath : string, cb? : (IResponse) => any) {
+        if (!cb) {
+            cb = FileDb._NOOP;
+        }
+
+        fromPath = FileUtils.normalizePath(fromPath);
+        toPath   = FileUtils.normalizePath(toPath);
+        var transactionConfig : ITransactionConfig = {
+            mode        : FileDb._READ_WRITE,
+            successMsg  : ['\tSUCCESS: Transaction for moving "', fromPath, '" to "', toPath, '" in database "', this.name, '" completed.'].join(''),
+            errorMsg    : ['\tFAILURE: Could not move "', fromPath, '" to "', toPath, '" in database "', this.name, '".'].join(''),
+            abortMsg    : ['\tFAILURE: Transaction aborted while moving "', fromPath, '" to "', toPath, '" in database "', this.name, '".'].join('')
+        };
+
+
+        this._getTransaction(transactionConfig, cb).done((transaction : IDBTransaction) => {
+        });
     }
 }
 

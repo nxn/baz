@@ -102,77 +102,78 @@ define(["require", "exports", './filedb', './async', './tree-view'], function(re
         }));
     }).next(function (fs) {
         return function (cb) {
-            return fs.put(bazSolution, function () {
+            return fs.save(bazSolution, function () {
                 return cb(fs);
             });
         }
     }).next(function (fs) {
         return function (cb) {
-            return fs.put(bazProject, function () {
+            return fs.save(bazProject, function () {
                 return cb(fs);
             });
         }
     }).next(function (fs) {
         return function (cb) {
-            return fs.put(bazTS, function () {
+            return fs.save(bazTS, function () {
                 return cb(fs);
             });
         }
     }).next(function (fs) {
         return function (cb) {
-            return fs.put(bazJS, function () {
+            return fs.save(bazJS, function () {
                 return cb(fs);
             });
         }
     }).next(function (fs) {
         return function (cb) {
-            return fs.put(bazCSS, function () {
+            return fs.save(bazCSS, function () {
                 return cb(fs);
             });
         }
     }).next(function (fs) {
         return function (cb) {
-            return fs.put(aceDir, function () {
+            return fs.save(aceDir, function () {
                 return cb(fs);
             });
         }
     }).next(function (fs) {
         return function (cb) {
-            return fs.put(aceJS, function () {
+            return fs.save(aceJS, function () {
                 return cb(fs);
             });
         }
     }).next(function (fs) {
         return function (cb) {
-            return fs.put(aceLong, function () {
+            return fs.save(aceLong, function () {
                 return cb(fs);
             });
         }
     }).next(function (fs) {
         return function (cb) {
-            return fs.put(compilerProject, function () {
+            return fs.save(compilerProject, function () {
                 return cb(fs);
             });
         }
     }).next(function (fs) {
         return function (cb) {
-            return fs.put(tscTS, function () {
+            return fs.save(tscTS, function () {
                 return cb(fs);
             });
         }
     }).next(function (fs) {
         return function (cb) {
-            return fs.put(libTS, function () {
+            return fs.save(libTS, function () {
                 return cb(fs);
             });
         }
     }).done(function (fs) {
-        return (window).tree = new ui.FSTreeView({
+        (window).tree = new ui.FSTreeView({
             db: fs,
             environment: env,
             path: '/baz.sln',
             parentSel: '#solution-explorer'
         });
+        (window).fs = fs;
     });
 })
 

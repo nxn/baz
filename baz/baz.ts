@@ -101,20 +101,23 @@ var env = {
 }
 
 async.newTask(cb => cb(fs.open({ name: 'baz', environment: env })))
-    .next((fs : IFileDb) => cb => fs.put(bazSolution,       () => cb(fs)))
-    .next((fs : IFileDb) => cb => fs.put(bazProject,        () => cb(fs)))
-    .next((fs : IFileDb) => cb => fs.put(bazTS,             () => cb(fs)))
-    .next((fs : IFileDb) => cb => fs.put(bazJS,             () => cb(fs)))
-    .next((fs : IFileDb) => cb => fs.put(bazCSS,            () => cb(fs)))
-    .next((fs : IFileDb) => cb => fs.put(aceDir,            () => cb(fs)))
-    .next((fs : IFileDb) => cb => fs.put(aceJS,             () => cb(fs)))
-    .next((fs : IFileDb) => cb => fs.put(aceLong,           () => cb(fs)))
-    .next((fs : IFileDb) => cb => fs.put(compilerProject,   () => cb(fs)))
-    .next((fs : IFileDb) => cb => fs.put(tscTS,             () => cb(fs)))
-    .next((fs : IFileDb) => cb => fs.put(libTS,             () => cb(fs)))
-    .done((fs : IFileDb) => (<any> window).tree = new ui.FSTreeView({
-        db          : fs,
-        environment : env,
-        path        : '/baz.sln',
-        parentSel   : '#solution-explorer'
-    }));
+    .next((fs : IFileDb) => cb => fs.save(bazSolution,       () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.save(bazProject,        () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.save(bazTS,             () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.save(bazJS,             () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.save(bazCSS,            () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.save(aceDir,            () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.save(aceJS,             () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.save(aceLong,           () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.save(compilerProject,   () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.save(tscTS,             () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.save(libTS,             () => cb(fs)))
+    .done((fs : IFileDb) => {
+        (<any> window).tree = new ui.FSTreeView({
+            db          : fs,
+            environment : env,
+            path        : '/baz.sln',
+            parentSel   : '#solution-explorer'
+        });
+        (<any> window).fs = fs;
+    });

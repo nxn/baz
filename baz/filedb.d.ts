@@ -26,9 +26,12 @@ interface IFileStoreObject extends IFileData {
 }
 
 interface IFile extends IFileStoreObject {
-    size            : number;
-    childCount      : number;
+    size        : number;
+    childCount  : number;
+
     forEachChild(fn : (child : IChildInfo) => any) : void;
+    getStoreObject() : IFileStoreObject;
+    getInfoObject() : IFileInfo;
 }
 
 interface IFileDbConfig {
@@ -38,17 +41,20 @@ interface IFileDbConfig {
 }
 
 interface IFileUtils {
-    getAbsolutePath(padthInfo : IPathInfo)          : string;
-    normalizePath(value : string)                   : string;
-    trimTrailingSlashes(value : string)             : string;
-    getPathInfo(absolutePath : string)              : IPathInfo;
+    getAbsolutePath(padthInfo : IPathInfo)  : string;
+    normalizePath(value : string)           : string;
+    trimTrailingSlashes(value : string)     : string;
+    getPathInfo(absolutePath : string)      : IPathInfo;
 }
 
 interface IFileDb {
     name                : string;
     version             : number;
-    get(absolutePath    : string,       cb: (IResponse) => any);
-    put(file            : IFileData,    cb: (IResponse) => any);
-    del(absolutePath    : string,       cb: (IResponse) => any);
     utils               : IFileUtils;
+
+    read(absolutePath : string, cb : (IResponse) => any);
+    save(file : IFileData, cb? : (IResponse) => any);
+    remove(absolutePath : string, cb? : (IResponse) => any);
+    copy(fromPath : string, toPath : string, cb? : (IResponse) => any);
+    move(fromPath : string, toPath : string, cb? : (IResponse) => any);   
 }
