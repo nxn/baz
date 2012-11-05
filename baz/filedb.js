@@ -315,11 +315,25 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
             this._openDb().done(function (db) {
                 var request = db.transaction(FileDb._FILE_STORE, FileDb._READ_ONLY).objectStore(FileDb._FILE_STORE).get(absolutePath);
                 request.onsuccess = function (ev) {
-                    _this._env.log('\tSUCCESS: Got "%s" from database "%s".', absolutePath, _this.name);
-                    cb({
-                        success: true,
-                        result: new File(request.result)
-                    });
+                    if(typeof (request.result) === 'undefined') {
+                        _this._env.log('\tINFO: No file found at path "%s" in database "%s".', absolutePath, _this.name);
+                        cb({
+                            success: false,
+                            error: [
+                                'No file found at path "', 
+                                absolutePath, 
+                                '" in database "', 
+                                _this.name, 
+                                '".'
+                            ].join('')
+                        });
+                    } else {
+                        _this._env.log('\tSUCCESS: Got "%s" from database "%s".', absolutePath, _this.name);
+                        cb({
+                            success: true,
+                            result: new File(request.result)
+                        });
+                    }
                 };
                 request.onerror = function (ev) {
                     _this._env.log('\tFAILURE: Could not get "%s" from database "%s".', absolutePath, _this.name);
@@ -426,38 +440,39 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                 });
             });
         };
-        FileDb.prototype.copy = function (fromPath, toPath, cb) {
+        FileDb.prototype.copy = function (source, destination, cb) {
             var _this = this;
             if(!cb) {
                 cb = FileDb._NOOP;
             }
-            fromPath = FileUtils.normalizePath(fromPath);
-            toPath = FileUtils.normalizePath(toPath);
+            source = FileUtils.normalizePath(source);
+            destination = FileUtils.normalizePath(destination);
+            this._env.log('Copying "%s" to "%s" in database "%s"...', source, destination, this.name);
             var transactionConfig = {
                 mode: FileDb._READ_WRITE,
                 successMsg: [
                     '\tSUCCESS: Transaction for copying "', 
-                    fromPath, 
+                    source, 
                     '" to "', 
-                    toPath, 
+                    destination, 
                     '" in database "', 
                     this.name, 
                     '" completed.'
                 ].join(''),
                 errorMsg: [
                     '\tFAILURE: Could not copy "', 
-                    fromPath, 
+                    source, 
                     '" to "', 
-                    toPath, 
+                    destination, 
                     '" in database "', 
                     this.name, 
                     '".'
                 ].join(''),
                 abortMsg: [
                     '\tFAILURE: Transaction aborted while copying "', 
-                    fromPath, 
+                    source, 
                     '" to "', 
-                    toPath, 
+                    destination, 
                     '" in database "', 
                     this.name, 
                     '".'
@@ -465,14 +480,25 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
             };
             this._getTransaction(transactionConfig, cb).done(function (transaction) {
                 async.newTask(function (cb) {
-                    transaction.objectStore(FileDb._FILE_STORE).get(fromPath).onsuccess = function (ev) {
+                    transaction.objectStore(FileDb._FILE_STORE).get(destination).onsuccess = function (ev) {
                         var result = (ev.target).result;
-                        if(typeof (result) === 'undefined') {
+                        if(typeof (result) !== 'undefined') {
                             (ev.target).transaction.abort();
-                            return;
+                        } else {
+                            cb();
                         }
-                        cb(result);
                     };
+                }).next(function () {
+                    return function (cb) {
+                        return transaction.objectStore(FileDb._FILE_STORE).get(source).onsuccess = function (ev) {
+                            var result = (ev.target).result;
+                            if(typeof (result) === 'undefined') {
+                                (ev.target).transaction.abort();
+                                return;
+                            }
+                            cb(result);
+                        };
+                    }
                 }).done(function (fileData) {
                     var root = new File(fileData);
                     _this._traverseWithAction(root, function (file) {
@@ -481,9 +507,9 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                         var newPathInfo = null;
 
                         if(isRoot) {
-                            newPathInfo = FileUtils.getPathInfo(toPath);
+                            newPathInfo = FileUtils.getPathInfo(destination);
                         } else {
-                            newPathInfo = FileUtils.getPathInfo(oldFilePath.replace(fromPath, toPath));
+                            newPathInfo = FileUtils.getPathInfo(oldFilePath.replace(source, destination));
                         }
                         file.name = newPathInfo.name;
                         file.location = newPathInfo.location;
@@ -497,37 +523,37 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                 });
             });
         };
-        FileDb.prototype.move = function (fromPath, toPath, cb) {
+        FileDb.prototype.move = function (source, destination, cb) {
             if(!cb) {
                 cb = FileDb._NOOP;
             }
-            fromPath = FileUtils.normalizePath(fromPath);
-            toPath = FileUtils.normalizePath(toPath);
+            source = FileUtils.normalizePath(source);
+            destination = FileUtils.normalizePath(destination);
             var transactionConfig = {
                 mode: FileDb._READ_WRITE,
                 successMsg: [
                     '\tSUCCESS: Transaction for moving "', 
-                    fromPath, 
+                    source, 
                     '" to "', 
-                    toPath, 
+                    destination, 
                     '" in database "', 
                     this.name, 
                     '" completed.'
                 ].join(''),
                 errorMsg: [
                     '\tFAILURE: Could not move "', 
-                    fromPath, 
+                    source, 
                     '" to "', 
-                    toPath, 
+                    destination, 
                     '" in database "', 
                     this.name, 
                     '".'
                 ].join(''),
                 abortMsg: [
                     '\tFAILURE: Transaction aborted while moving "', 
-                    fromPath, 
+                    source, 
                     '" to "', 
-                    toPath, 
+                    destination, 
                     '" in database "', 
                     this.name, 
                     '".'

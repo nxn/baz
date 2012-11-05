@@ -55,6 +55,6 @@ interface IFileDb {
     read(absolutePath : string, cb : (IResponse) => any);
     save(file : IFileData, cb? : (IResponse) => any);
     remove(absolutePath : string, cb? : (IResponse) => any);
-    copy(fromPath : string, toPath : string, cb? : (IResponse) => any);
-    move(fromPath : string, toPath : string, cb? : (IResponse) => any);   
+    copy(source : string, destination : string, cb? : (IResponse) => any);
+    move(source : string, destination : string, cb? : (IResponse) => any);   
 }
