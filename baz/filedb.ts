@@ -142,6 +142,7 @@ module FileUtils {
 
 interface ITransactionConfig {
     mode?       : string;
+    initMsg     : string;
     errorMsg    : string;
     abortMsg    : string;
     successMsg  : string;
@@ -178,7 +179,7 @@ class FileDb implements IFileDb {
 
     private _initDb(db : IDBDatabase) {
         this._env.log(
-            'Creating object store "%s" in database "%s"...', 
+            'INFO: Creating object store "%s" in database "%s"...', 
             FileDb._FILE_STORE, 
             db.name
         );
@@ -215,7 +216,7 @@ class FileDb implements IFileDb {
                 return;
             }
 
-            this._env.log('Opening database "%s", version "%d"...', this.name, this.version);
+            this._env.log('INFO: Opening database "%s", version "%d"...', this.name, this.version);
             var request = FileDb._INDEXEDDB.open(this.name, this.version);
 
             request.onsuccess = (ev) => {
@@ -227,13 +228,13 @@ class FileDb implements IFileDb {
             }
 
             request.onerror = (ev) => {
-                this._env.log("Unhandled error: ", (<any> ev.target).error);
+                this._env.log("\tFAILURE:", (<any> ev.target).error);
             }
 
             request.onupgradeneeded = (ev) => {
                 var db = <IDBDatabase> request.result;
                 this._env.log(
-                    'Upgrade needed for database "%s", version "%d". Current Version: "%d".',
+                    'INFO: Upgrade needed for database "%s", version "%d". Current Version: "%d".',
                     db.name,
                     db.version,
                     FileDb._CURRENT_DB_VERSION
@@ -251,6 +252,8 @@ class FileDb implements IFileDb {
     private _getTransaction(config : ITransactionConfig, cb : (IResponse) => any) {
         return this._openDb().next((db : IDBDatabase) => {
             var transaction = db.transaction(FileDb._FILE_STORE, config.mode || FileDb._READ_ONLY);
+
+            this._env.log(config.initMsg);
 
             transaction.onerror = (ev) => {
                 this._env.log(config.errorMsg);
@@ -272,18 +275,17 @@ class FileDb implements IFileDb {
     }
 
     private _addChildReferenceFor(file : IFile, transaction : IDBTransaction) {
-        async.newTask(cb =>
-            transaction
-                .objectStore(FileDb._FILE_STORE)
-                .get(file.location)
-                .onsuccess = (ev) => {
-                    var result = (<any> ev.target).result;
+        async.newTask(cb => transaction
+            .objectStore(FileDb._FILE_STORE)
+            .get(file.location)
+            .onsuccess = (ev) => {
+                var result = (<any> ev.target).result;
 
-                    if (typeof result === 'undefined') {
-                        (<any> ev.target).transaction.abort();
-                    }
-                    else cb(result);
+                if (typeof result === 'undefined') {
+                    (<any> ev.target).transaction.abort();
                 }
+                else cb(result);
+            }
         ).next((parentData : IFileData) => {
             var parent = new File(parentData);
             parent.addChild(file);
@@ -294,7 +296,7 @@ class FileDb implements IFileDb {
                 .onsuccess = cb;
         }).done(() =>
             this._env.log(
-                '\t\tSUCCESS: Added reference "%s" to parent "%s".',
+                '\tSUCCESS: Added reference "%s" to parent "%s".',
                 file.name,
                 file.location
             )
@@ -304,18 +306,17 @@ class FileDb implements IFileDb {
     private _removeChildReferenceFor(absolutePath : string, transaction : IDBTransaction) {
         var pathInfo = FileUtils.getPathInfo(absolutePath);
 
-        async.newTask(cb => 
-            transaction
-                .objectStore(FileDb._FILE_STORE)
-                .get(pathInfo.location)
-                .onsuccess = (ev) => {
-                    var result = (<any> ev.target).result;
+        async.newTask(cb => transaction
+            .objectStore(FileDb._FILE_STORE)
+            .get(pathInfo.location)
+            .onsuccess = (ev) => {
+                var result = (<any> ev.target).result;
 
-                    if (typeof(result) === 'undefined') {
-                        (<any> ev.target).transaction.abort();
-                    } 
-                    else cb(result);
-                }
+                if (typeof(result) === 'undefined') {
+                    (<any> ev.target).transaction.abort();
+                } 
+                else cb(result);
+            }
         ).next((parentData : IFileData) => {
             var parent = new File(parentData);
 
@@ -328,7 +329,7 @@ class FileDb implements IFileDb {
             }
         ).done(() =>
             this._env.log(
-                '\t\tSUCCESS: Removed reference "%s" from parent "%s".',
+                '\tSUCCESS: Removed reference "%s" from parent "%s".',
                 pathInfo.name,
                 pathInfo.location
             )
@@ -340,21 +341,21 @@ class FileDb implements IFileDb {
         root        : IFile, 
         action      : (file : IFile) => void
     ) {
-        root.forEachChild(c => 
-            transaction
-                .objectStore(FileDb._FILE_STORE)
-                .get(
-                    FileUtils.getAbsolutePath({ 
-                        name    : c.name, 
-                        location: root.absolutePath
-                    })
-                ).onsuccess = (ev => {
-                    var result : IFileData = (<any> ev.target).result;
-
-                    if (result) {
-                        this._traverseWithAction(transaction, new File(result), action);
-                    }
+        root.forEachChild(c => transaction
+            .objectStore(FileDb._FILE_STORE)
+            .get(
+                FileUtils.getAbsolutePath({ 
+                    name    : c.name, 
+                    location: root.absolutePath
                 })
+            )
+            .onsuccess = (ev => {
+                var result : IFileData = (<any> ev.target).result;
+
+                if (result) {
+                    this._traverseWithAction(transaction, new File(result), action);
+                }
+            })
         );
 
         action(root);
@@ -365,21 +366,21 @@ class FileDb implements IFileDb {
         destination : string, 
         transaction : IDBTransaction
     ) : ITask {
-        return async.newTask(cb => {
-            transaction
-                .objectStore(FileDb._FILE_STORE)
-                .get(source)
-                .onsuccess = (ev) => {
-                    var result = (<any> ev.target).result;
+        return async.newTask(cb => transaction
+            .objectStore(FileDb._FILE_STORE)
+            .get(source)
+            .onsuccess = (ev) => {
+                var result = (<any> ev.target).result;
 
-                    if (typeof(result) === 'undefined') {
-                        (<any> ev.target).transaction.abort();
-                        return;
-                    }
-
-                    cb(result);
+                if (typeof(result) === 'undefined') {
+                    (<any> ev.target).transaction.abort();
+                    return;
                 }
-        }).next((fileData : IFileData) => {
+
+                cb(result);
+            }
+        )
+        .next((fileData : IFileData) => {
             // Traverse the file and its children updating, saving them to their new destinations
             var root = new File(fileData);
 
@@ -413,7 +414,7 @@ class FileDb implements IFileDb {
     read(absolutePath : string, cb : (IResponse) => any) {
         absolutePath = FileUtils.normalizePath(absolutePath);
 
-        this._env.log('Getting "%s" from database "%s"...', absolutePath, this.name);
+        this._env.log('INFO: Getting "%s" from database "%s"...', absolutePath, this.name);
 
         this._openDb().done((db : IDBDatabase) => {
             var request = db.transaction(FileDb._FILE_STORE, FileDb._READ_ONLY)
@@ -422,7 +423,7 @@ class FileDb implements IFileDb {
 
             request.onsuccess = (ev) => {
                 if (typeof(request.result) === 'undefined') {
-                    this._env.log('\tINFO: No file found at path "%s" in database "%s".', absolutePath, this.name);
+                    this._env.log('\tERROR: No file found at path "%s" in database "%s".', absolutePath, this.name);
                     cb({ success: false, error: ['No file found at path "', absolutePath, '" in database "', this.name, '".'].join('') });
                 }
                 else {
@@ -445,10 +446,9 @@ class FileDb implements IFileDb {
 
         var file = new File(fileData);
 
-        this._env.log('Saving "%s" to database "%s"...', file.absolutePath, this.name);
-
         var transactionConfig : ITransactionConfig = {
             mode        : FileDb._READ_WRITE,
+            initMsg     : ['INFO: Starting transaction to save "', file.absolutePath, '" to database "', this.name, '"...'].join(''),
             successMsg  : ['\tSUCCESS: Transaction for saving "', file.absolutePath, '" to database "', this.name, '" completed.'].join(''),
             abortMsg    : ['\tFAILURE: Transaction aborted while saving "', file.absolutePath, '" to database "', this.name, '".'].join(''),
             errorMsg    : ['\tFAILURE: Could not save "', file.absolutePath, '" to database "', this.name, '".'].join('')
@@ -465,7 +465,7 @@ class FileDb implements IFileDb {
                         .onsuccess = cb
             })
             .done(() => 
-                this._env.log('\t\tSUCCESS: Saved "%s" to database "%s".', file.absolutePath, this.name);
+                this._env.log('\tSUCCESS: Saved "%s" to database "%s".', file.absolutePath, this.name);
             );
     }
 
@@ -476,10 +476,9 @@ class FileDb implements IFileDb {
 
         absolutePath = FileUtils.normalizePath(absolutePath);
 
-        this._env.log('Removing "%s" from database "%s"...', absolutePath, this.name);
-
         var transactionConfig : ITransactionConfig = {
             mode        : FileDb._READ_WRITE,
+            initMsg     : ['INFO: Starting transaction to remove "', absolutePath, '" from database "', this.name, '"...'].join(''),
             successMsg  : ['\tSUCCESS: Transaction for removal of "', absolutePath, '" from database "', this.name, '" completed.'].join(''),
             errorMsg    : ['\tFAILURE: Could not remove "', absolutePath, '" from database "', this.name, '".'].join(''),
             abortMsg    : ['\tFAILURE: Transaction aborted while deleting "', absolutePath, '" from database "', this.name, '".'].join('')
@@ -489,32 +488,31 @@ class FileDb implements IFileDb {
             .next((transaction : IDBTransaction) => {
                 this._removeChildReferenceFor(absolutePath, transaction);
 
-                return cb => 
-                    transaction
-                        .objectStore(FileDb._FILE_STORE)
-                        .get(absolutePath)
-                        .onsuccess = (ev) => {
-                            var result = (<any> ev.target).result;
+                return cb => transaction
+                    .objectStore(FileDb._FILE_STORE)
+                    .get(absolutePath)
+                    .onsuccess = (ev) => {
+                        var result = (<any> ev.target).result;
 
-                            if (typeof(result) === 'undefined') {
-                                (<any> ev.target).transaction.abort();
-                            }
-                            else cb(new File(result), transaction);
+                        if (typeof(result) === 'undefined') {
+                            (<any> ev.target).transaction.abort();
                         }
+                        else cb(new File(result), transaction);
+                    }
             })
             .next((root : IFile, transaction : IDBTransaction) => {
                 return cb => this._traverseWithAction(
                     transaction,
                     root,
-                    (child : IFile) =>
-                        transaction
-                            .objectStore(FileDb._FILE_STORE)
-                            .delete(child.absolutePath)
-                            .onsuccess = ev => cb(child.absolutePath)
+                    (child : IFile) => transaction
+                        .objectStore(FileDb._FILE_STORE)
+                        .delete(child.absolutePath)
+                        .onsuccess = ev => cb(child.absolutePath)
                 );
-            }).done((path : string) =>
+            })
+            .done((path : string) =>
                 this._env.log(
-                    '\t\tSUCCESS: Removing item "%s" from database "%s".',
+                    '\tSUCCESS: Removing item "%s" from database "%s".',
                     path,
                     this.name
                 )
@@ -529,10 +527,9 @@ class FileDb implements IFileDb {
         source      = FileUtils.normalizePath(source);
         destination = FileUtils.normalizePath(destination);
 
-        this._env.log('Copying "%s" to "%s" in database "%s"...', source, destination, this.name);
-
         var transactionConfig : ITransactionConfig = {
             mode        : FileDb._READ_WRITE,
+            initMsg     : ['INFO: Starting transaction to copy "', source, '" to "', destination, '" in database "', this.name, '"...'].join(''),
             successMsg  : ['\tSUCCESS: Transaction for copying "', source, '" to "', destination, '" in database "', this.name, '" completed.'].join(''),
             errorMsg    : ['\tFAILURE: Could not copy "', source, '" to "', destination, '" in database "', this.name, '".'].join(''),
             abortMsg    : ['\tFAILURE: Transaction aborted while copying "', source, '" to "', destination, '" in database "', this.name, '".'].join('')
@@ -541,7 +538,7 @@ class FileDb implements IFileDb {
         this._getTransaction(transactionConfig, cb)
             .next((transaction : IDBTransaction) => cb => this._copy(source, destination, transaction).done(cb))
             .done((source : string, destination : string, transaction : IDBTransaction) =>
-                this._env.log('\t\tSUCCESS: Copied "%s" to "%s".', source, destination)
+                this._env.log('\tSUCCESS: Copied "%s" to "%s".', source, destination)
             );
     }
 
@@ -553,10 +550,9 @@ class FileDb implements IFileDb {
         source      = FileUtils.normalizePath(source);
         destination = FileUtils.normalizePath(destination);
 
-        this._env.log('Moving "%s" to "%s" in database "%s"...', source, destination, this.name);
-
         var transactionConfig : ITransactionConfig = {
             mode        : FileDb._READ_WRITE,
+            initMsg     : ['INFO: Starting transaction to move "', source, '" to "', destination, '" in database "', this.name, '"...'].join(''),
             successMsg  : ['\tSUCCESS: Transaction for moving "', source, '" to "', destination, '" in database "', this.name, '" completed.'].join(''),
             errorMsg    : ['\tFAILURE: Could not move "', source, '" to "', destination, '" in database "', this.name, '".'].join(''),
             abortMsg    : ['\tFAILURE: Transaction aborted while moving "', source, '" to "', destination, '" in database "', this.name, '".'].join('')
@@ -574,7 +570,7 @@ class FileDb implements IFileDb {
                     .onsuccess = ev => cb(source, destination)
             )
             .done((source : string, destination : string) =>
-                this._env.log('\t\tSUCCESS: Moved "%s" to "%s".', source, destination)
+                this._env.log('\tSUCCESS: Moved "%s" to "%s".', source, destination)
             );
     }
 }

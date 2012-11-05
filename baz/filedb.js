@@ -171,7 +171,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
         });
         FileDb.prototype._initDb = function (db) {
             var _this = this;
-            this._env.log('Creating object store "%s" in database "%s"...', FileDb._FILE_STORE, db.name);
+            this._env.log('INFO: Creating object store "%s" in database "%s"...', FileDb._FILE_STORE, db.name);
             var fileStore = db.createObjectStore(FileDb._FILE_STORE, {
                 keyPath: FileDb._FILE_STORE_KEY
             });
@@ -196,7 +196,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                     cb(FileDb._OPEN_DBS[_this.name]);
                     return;
                 }
-                _this._env.log('Opening database "%s", version "%d"...', _this.name, _this.version);
+                _this._env.log('INFO: Opening database "%s", version "%d"...', _this.name, _this.version);
                 var request = FileDb._INDEXEDDB.open(_this.name, _this.version);
                 request.onsuccess = function (ev) {
                     var result = request.result;
@@ -205,11 +205,11 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                     cb(result);
                 };
                 request.onerror = function (ev) {
-                    _this._env.log("Unhandled error: ", (ev.target).error);
+                    _this._env.log("\tFAILURE:", (ev.target).error);
                 };
                 request.onupgradeneeded = function (ev) {
                     var db = request.result;
-                    _this._env.log('Upgrade needed for database "%s", version "%d". Current Version: "%d".', db.name, db.version, FileDb._CURRENT_DB_VERSION);
+                    _this._env.log('INFO: Upgrade needed for database "%s", version "%d". Current Version: "%d".', db.name, db.version, FileDb._CURRENT_DB_VERSION);
                     switch(db.version) {
                         default: {
                             _this._initDb(db);
@@ -224,6 +224,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
             var _this = this;
             return this._openDb().next(function (db) {
                 var transaction = db.transaction(FileDb._FILE_STORE, config.mode || FileDb._READ_ONLY);
+                _this._env.log(config.initMsg);
                 transaction.onerror = function (ev) {
                     _this._env.log(config.errorMsg);
                     cb({
@@ -268,7 +269,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                     return transaction.objectStore(FileDb._FILE_STORE).put(parent.getStoreObject()).onsuccess = cb;
                 }
             }).done(function () {
-                return _this._env.log('\t\tSUCCESS: Added reference "%s" to parent "%s".', file.name, file.location);
+                return _this._env.log('\tSUCCESS: Added reference "%s" to parent "%s".', file.name, file.location);
             });
         };
         FileDb.prototype._removeChildReferenceFor = function (absolutePath, transaction) {
@@ -290,7 +291,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                     return transaction.objectStore(FileDb._FILE_STORE).put(parent.getStoreObject()).onsuccess = cb;
                 }
             }).done(function () {
-                return _this._env.log('\t\tSUCCESS: Removed reference "%s" from parent "%s".', pathInfo.name, pathInfo.location);
+                return _this._env.log('\tSUCCESS: Removed reference "%s" from parent "%s".', pathInfo.name, pathInfo.location);
             });
         };
         FileDb.prototype._traverseWithAction = function (transaction, root, action) {
@@ -311,7 +312,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
         FileDb.prototype._copy = function (source, destination, transaction) {
             var _this = this;
             return async.newTask(function (cb) {
-                transaction.objectStore(FileDb._FILE_STORE).get(source).onsuccess = function (ev) {
+                return transaction.objectStore(FileDb._FILE_STORE).get(source).onsuccess = function (ev) {
                     var result = (ev.target).result;
                     if(typeof (result) === 'undefined') {
                         (ev.target).transaction.abort();
@@ -347,12 +348,12 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
         FileDb.prototype.read = function (absolutePath, cb) {
             var _this = this;
             absolutePath = FileUtils.normalizePath(absolutePath);
-            this._env.log('Getting "%s" from database "%s"...', absolutePath, this.name);
+            this._env.log('INFO: Getting "%s" from database "%s"...', absolutePath, this.name);
             this._openDb().done(function (db) {
                 var request = db.transaction(FileDb._FILE_STORE, FileDb._READ_ONLY).objectStore(FileDb._FILE_STORE).get(absolutePath);
                 request.onsuccess = function (ev) {
                     if(typeof (request.result) === 'undefined') {
-                        _this._env.log('\tINFO: No file found at path "%s" in database "%s".', absolutePath, _this.name);
+                        _this._env.log('\tERROR: No file found at path "%s" in database "%s".', absolutePath, _this.name);
                         cb({
                             success: false,
                             error: [
@@ -386,9 +387,15 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                 cb = FileDb._NOOP;
             }
             var file = new File(fileData);
-            this._env.log('Saving "%s" to database "%s"...', file.absolutePath, this.name);
             var transactionConfig = {
                 mode: FileDb._READ_WRITE,
+                initMsg: [
+                    'INFO: Starting transaction to save "', 
+                    file.absolutePath, 
+                    '" to database "', 
+                    this.name, 
+                    '"...'
+                ].join(''),
                 successMsg: [
                     '\tSUCCESS: Transaction for saving "', 
                     file.absolutePath, 
@@ -417,7 +424,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                     return transaction.objectStore(FileDb._FILE_STORE).put(file.getStoreObject()).onsuccess = cb;
                 }
             }).done(function () {
-                return _this._env.log('\t\tSUCCESS: Saved "%s" to database "%s".', file.absolutePath, _this.name);
+                return _this._env.log('\tSUCCESS: Saved "%s" to database "%s".', file.absolutePath, _this.name);
             });
         };
         FileDb.prototype.remove = function (absolutePath, cb) {
@@ -426,9 +433,15 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                 cb = FileDb._NOOP;
             }
             absolutePath = FileUtils.normalizePath(absolutePath);
-            this._env.log('Removing "%s" from database "%s"...', absolutePath, this.name);
             var transactionConfig = {
                 mode: FileDb._READ_WRITE,
+                initMsg: [
+                    'INFO: Starting transaction to remove "', 
+                    absolutePath, 
+                    '" from database "', 
+                    this.name, 
+                    '"...'
+                ].join(''),
                 successMsg: [
                     '\tSUCCESS: Transaction for removal of "', 
                     absolutePath, 
@@ -472,7 +485,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                     });
                 }
             }).done(function (path) {
-                return _this._env.log('\t\tSUCCESS: Removing item "%s" from database "%s".', path, _this.name);
+                return _this._env.log('\tSUCCESS: Removing item "%s" from database "%s".', path, _this.name);
             });
         };
         FileDb.prototype.copy = function (source, destination, cb) {
@@ -482,9 +495,17 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
             }
             source = FileUtils.normalizePath(source);
             destination = FileUtils.normalizePath(destination);
-            this._env.log('Copying "%s" to "%s" in database "%s"...', source, destination, this.name);
             var transactionConfig = {
                 mode: FileDb._READ_WRITE,
+                initMsg: [
+                    'INFO: Starting transaction to copy "', 
+                    source, 
+                    '" to "', 
+                    destination, 
+                    '" in database "', 
+                    this.name, 
+                    '"...'
+                ].join(''),
                 successMsg: [
                     '\tSUCCESS: Transaction for copying "', 
                     source, 
@@ -518,7 +539,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                     return _this._copy(source, destination, transaction).done(cb);
                 }
             }).done(function (source, destination, transaction) {
-                return _this._env.log('\t\tSUCCESS: Copied "%s" to "%s".', source, destination);
+                return _this._env.log('\tSUCCESS: Copied "%s" to "%s".', source, destination);
             });
         };
         FileDb.prototype.move = function (source, destination, cb) {
@@ -528,9 +549,17 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
             }
             source = FileUtils.normalizePath(source);
             destination = FileUtils.normalizePath(destination);
-            this._env.log('Moving "%s" to "%s" in database "%s"...', source, destination, this.name);
             var transactionConfig = {
                 mode: FileDb._READ_WRITE,
+                initMsg: [
+                    'INFO: Starting transaction to move "', 
+                    source, 
+                    '" to "', 
+                    destination, 
+                    '" in database "', 
+                    this.name, 
+                    '"...'
+                ].join(''),
                 successMsg: [
                     '\tSUCCESS: Transaction for moving "', 
                     source, 
@@ -571,7 +600,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                     };
                 }
             }).done(function (source, destination) {
-                return _this._env.log('\t\tSUCCESS: Moved "%s" to "%s".', source, destination);
+                return _this._env.log('\tSUCCESS: Moved "%s" to "%s".', source, destination);
             });
         };
         return FileDb;
