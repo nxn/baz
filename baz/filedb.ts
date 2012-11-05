@@ -474,13 +474,63 @@ class FileDb implements IFileDb {
         });
     }
 
+    private _copy(
+        source      : string, 
+        destination : string, 
+        transaction : IDBTransaction
+    ) : ITask {
+        return async.newTask(cb => {
+            transaction
+                .objectStore(FileDb._FILE_STORE)
+                .get(source)
+                .onsuccess = (ev) => {
+                    var result = (<any> ev.target).result;
+
+                    if (typeof(result) === 'undefined') {
+                        (<any> ev.target).transaction.abort();
+                        return;
+                    }
+
+                    cb(result);
+                }
+        }).next((fileData : IFileData) => {
+            // Traverse the file and its children updating, saving them to their new destinations
+            var root = new File(fileData);
+
+            return cb => this._traverseWithAction(root, (file : IFile) => {
+                var isRoot = file.absolutePath === root.absolutePath
+                    , oldFilePath = file.absolutePath
+                    , newPathInfo = null;
+
+                if (isRoot) {
+                    newPathInfo = FileUtils.getPathInfo(destination);
+                }
+                else {
+                    newPathInfo = FileUtils.getPathInfo(oldFilePath.replace(source, destination));
+                }
+
+                file.name      = newPathInfo.name;
+                file.location  = newPathInfo.location;
+
+                if (isRoot) {
+                    this._addChildReferenceFor(file, transaction);
+                }
+
+                transaction
+                    .objectStore(FileDb._FILE_STORE)
+                    .add(file.getStoreObject()) // use add to prevent overwriting a node
+                    .onsuccess = ev => cb(oldFilePath, file.absolutePath, transaction)
+            }, transaction);
+        });
+    }
+
     copy(source : string, destination : string, cb? : (IResponse) => any) {
         if (!cb) {
             cb = FileDb._NOOP;
         }
 
-        source = FileUtils.normalizePath(source);
-        destination   = FileUtils.normalizePath(destination);
+        source      = FileUtils.normalizePath(source);
+        destination = FileUtils.normalizePath(destination);
 
         this._env.log('Copying "%s" to "%s" in database "%s"...', source, destination, this.name);
 
@@ -491,67 +541,11 @@ class FileDb implements IFileDb {
             abortMsg    : ['\tFAILURE: Transaction aborted while copying "', source, '" to "', destination, '" in database "', this.name, '".'].join('')
         };
 
-        this._getTransaction(transactionConfig, cb).done((transaction : IDBTransaction) => {
-            async.newTask(cb => {
-                // Check that the destination does not exist to avoid orphaning its child nodes
-                transaction
-                    .objectStore(FileDb._FILE_STORE)
-                    .get(destination)
-                    .onsuccess = (ev) => {
-                        var result = (<any> ev.target).result;
-
-                        if (typeof(result) !== 'undefined') {
-                            (<any> ev.target).transaction.abort();
-                        }
-                        else cb();
-                    }
-            }).next(() => {
-                // Get the file at the source path
-                return cb => transaction
-                    .objectStore(FileDb._FILE_STORE)
-                    .get(source)
-                    .onsuccess = (ev) => {
-                        var result = (<any> ev.target).result;
-
-                        if (typeof(result) === 'undefined') {
-                            (<any> ev.target).transaction.abort();
-                            return;
-                        }
-
-                        cb(result);
-                    }
-            }).done((fileData : IFileData) => {
-                // Traverse the file and its children updating, saving them to their new destinations
-                var root = new File(fileData);
-
-                this._traverseWithAction(root, (file : IFile) => {
-                    var isRoot = file.absolutePath === root.absolutePath
-                      , oldFilePath = file.absolutePath
-                      , newPathInfo = null;
-
-                    if (isRoot) {
-                        newPathInfo = FileUtils.getPathInfo(destination);
-                    }
-                    else {
-                        newPathInfo = FileUtils.getPathInfo(oldFilePath.replace(source, destination));
-                    }
-
-                    file.name      = newPathInfo.name;
-                    file.location  = newPathInfo.location;
-
-                    if (isRoot) {
-                        this._addChildReferenceFor(file, transaction);
-                    }
-
-                    transaction
-                        .objectStore(FileDb._FILE_STORE)
-                        .put(file.getStoreObject())
-                        .onsuccess = ev => {
-                            this._env.log('\t\tSUCCESS: Copied "%s" to "%s".', oldFilePath, file.absolutePath);
-                        }
-                }, transaction);
-            });
-        });
+        this._getTransaction(transactionConfig, cb)
+            .next((transaction : IDBTransaction) => cb => this._copy(source, destination, transaction).done(cb))
+            .done((source : string, destination : string, transaction : IDBTransaction) =>
+                this._env.log('\t\tSUCCESS: Copied "%s" to "%s".', source, destination)
+            );
     }
 
     move(source : string, destination : string, cb? : (IResponse) => any) {
@@ -559,8 +553,11 @@ class FileDb implements IFileDb {
             cb = FileDb._NOOP;
         }
 
-        source = FileUtils.normalizePath(source);
-        destination   = FileUtils.normalizePath(destination);
+        source      = FileUtils.normalizePath(source);
+        destination = FileUtils.normalizePath(destination);
+
+        this._env.log('Moving "%s" to "%s" in database "%s"...', source, destination, this.name);
+
         var transactionConfig : ITransactionConfig = {
             mode        : FileDb._READ_WRITE,
             successMsg  : ['\tSUCCESS: Transaction for moving "', source, '" to "', destination, '" in database "', this.name, '" completed.'].join(''),
@@ -568,8 +565,20 @@ class FileDb implements IFileDb {
             abortMsg    : ['\tFAILURE: Transaction aborted while moving "', source, '" to "', destination, '" in database "', this.name, '".'].join('')
         };
 
-        this._getTransaction(transactionConfig, cb).done((transaction : IDBTransaction) => {
-        });
+        this._getTransaction(transactionConfig, cb)
+            .next((transaction : IDBTransaction) => {
+                this._removeChildReferenceFor(source, transaction);
+                return cb => this._copy(source, destination, transaction).done(cb)
+            })
+            .next((source : string, destination : string, transaction : IDBTransaction) => cb =>
+                transaction
+                    .objectStore(FileDb._FILE_STORE)
+                    .delete(source)
+                    .onsuccess = ev => cb(source, destination)
+            )
+            .done((source : string, destination : string) =>
+                this._env.log('\t\tSUCCESS: Moved "%s" to "%s".', source, destination)
+            );
     }
 }
 

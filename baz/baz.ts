@@ -29,7 +29,7 @@ var bazTS : IFileData = {
 var bazJS : IFileData = {
     name: 'baz.js',
     type: 'text/javascript',
-    location: '/baz.sln/baz.proj/baz.ts',
+    location: '/baz.sln/baz.tsp/baz.ts',
     content: null,
     children: null
 }
