@@ -1,52 +1,46 @@
 define(["require", "exports", './async'], function(require, exports, __async__) {
     var async = __async__;
 
-    var File = (function () {
-        function File(fileData) {
-            this.name = fileData.name;
-            this.location = fileData.location;
-            this.type = fileData.type;
-            this.content = fileData.content;
-            this.children = fileData.children || {
+    
+    var FileInfo = (function () {
+        function FileInfo(fileInfoData) {
+            this.name = fileInfoData.name;
+            this.location = fileInfoData.location;
+            this.type = fileInfoData.type;
+            this.contentId = fileInfoData.contentId;
+            this.children = fileInfoData.children || {
             };
             this.childCount = Object.getOwnPropertyNames(this.children).length;
         }
-        File._rxRepeatingSlash = /\/{2,}/g;
-        File._rxTrailingSlash = /(.+?)(?:\/*)$/;
-        File.prototype.addChild = function (file) {
-            this.children[file.name] = {
-                name: file.name,
-                type: file.type
+        FileInfo._rxRepeatingSlash = /\/{2,}/g;
+        FileInfo._rxTrailingSlash = /(.+?)(?:\/*)$/;
+        FileInfo.prototype.addChild = function (child) {
+            this.children[child.name] = {
+                name: child.name,
+                type: child.type,
+                contentId: child.contentId
             };
         };
-        File.prototype.removeChild = function (filename) {
+        FileInfo.prototype.removeChild = function (filename) {
             delete this.children[filename];
         };
-        File.prototype.forEachChild = function (fn) {
+        FileInfo.prototype.forEachChild = function (fn) {
             var names = Object.getOwnPropertyNames(this.children);
             for(var i = 0, child; child = this.children[names[i]]; i++) {
                 fn(child);
             }
         };
-        File.prototype.getInfoObject = function () {
-            return {
-                name: this.name,
-                type: this.type,
-                location: this.location,
-                children: this.children
-            };
-        };
-        File.prototype.getStoreObject = function () {
+        FileInfo.prototype.getFileInfoData = function () {
             return {
                 name: this.name,
                 location: this.location,
                 type: this.type,
-                content: this.content,
                 children: this.children,
-                absolutePath: this.absolutePath
+                absolutePath: this.absolutePath,
+                contentId: this.contentId
             };
         };
-        Object.defineProperty(File.prototype, "name", {
+        Object.defineProperty(FileInfo.prototype, "name", {
             get: function () {
                 return this._name;
             },
@@ -60,7 +54,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
             enumerable: true,
             configurable: true
         });
-        Object.defineProperty(File.prototype, "location", {
+        Object.defineProperty(FileInfo.prototype, "location", {
             get: function () {
                 return this._location;
             },
@@ -74,7 +68,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
             enumerable: true,
             configurable: true
         });
-        Object.defineProperty(File.prototype, "size", {
+        Object.defineProperty(FileInfo.prototype, "size", {
             get: function () {
                 var files = Object.getOwnPropertyNames(this.children);
                 this.forEachChild(function (c) {
@@ -87,14 +81,14 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
             enumerable: true,
             configurable: true
         });
-        Object.defineProperty(File.prototype, "absolutePath", {
+        Object.defineProperty(FileInfo.prototype, "absolutePath", {
             get: function () {
                 return FileUtils.getAbsolutePath(this);
             },
             enumerable: true,
             configurable: true
         });
-        return File;
+        return FileInfo;
     })();    
     var FileUtils;
     (function (FileUtils) {
@@ -102,11 +96,11 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
         var rxTrailingSlash = /(.+?)(?:\/*)$/;
         var rxFilenameAndLocation = /^(\/(?:.*(?=\/))?)\/?(.*)$/;
         function normalizePath(value) {
-            return trimTrailingSlashes((value || "").trim().replace(File._rxRepeatingSlash, '/'));
+            return trimTrailingSlashes((value || "").trim().replace(FileInfo._rxRepeatingSlash, '/'));
         }
         FileUtils.normalizePath = normalizePath;
         function trimTrailingSlashes(value) {
-            var result = File._rxTrailingSlash.exec((value || "").trim());
+            var result = FileInfo._rxTrailingSlash.exec((value || "").trim());
             if(result && result[1]) {
                 value = result[1];
             }
@@ -140,7 +134,8 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
         FileDb._NOOP = function () {
         };
         FileDb._INDEXEDDB = window.indexedDB;
-        FileDb._FILE_STORE = "files";
+        FileDb._FILE_INFO_STORE = "file-infos";
+        FileDb._FILE_CONTENT_STORE = "file-contents";
         FileDb._FILE_STORE_KEY = "absolutePath";
         FileDb._FILE_STORE_NAME_INDEX = "name";
         FileDb._READ_WRITE = "readwrite";
@@ -171,21 +166,19 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
         });
         FileDb.prototype._initDb = function (db) {
             var _this = this;
-            this._env.log('INFO: Creating object store "%s" in database "%s"...', FileDb._FILE_STORE, db.name);
-            var fileStore = db.createObjectStore(FileDb._FILE_STORE, {
-                keyPath: FileDb._FILE_STORE_KEY
-            });
-            fileStore.createIndex(FileDb._FILE_STORE_NAME_INDEX, FileDb._FILE_STORE_NAME_INDEX, {
+            this._env.log('INFO: Creating object store "%s" in database "%s"...', FileDb._FILE_INFO_STORE, db.name);
+            var fileInfoStore = db.createObjectStore(FileDb._FILE_INFO_STORE);
+            fileInfoStore.createIndex(FileDb._FILE_STORE_NAME_INDEX, FileDb._FILE_STORE_NAME_INDEX, {
                 unique: false
             });
-            var root = {
+            var rootInfo = new FileInfo({
                 name: '',
                 location: '/',
                 type: 'application/vnd.baz.root',
-                content: null,
-                children: null
-            };
-            fileStore.put(new File(root).getStoreObject()).onerror = function (ev) {
+                children: null,
+                contentId: null
+            });
+            fileInfoStore.put(rootInfo.getFileInfoData(), rootInfo.absolutePath).onerror = function (ev) {
                 _this._env.log('\tFAILURE: Could not create ROOT in database "%s".', _this.name);
             };
         };
@@ -223,7 +216,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
         FileDb.prototype._getTransaction = function (config, cb) {
             var _this = this;
             return this._openDb().next(function (db) {
-                var transaction = db.transaction(FileDb._FILE_STORE, config.mode || FileDb._READ_ONLY);
+                var transaction = db.transaction(FileDb._FILE_INFO_STORE, config.mode || FileDb._READ_ONLY);
                 _this._env.log(config.initMsg);
                 transaction.onerror = function (ev) {
                     _this._env.log(config.errorMsg);
@@ -254,7 +247,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
         FileDb.prototype._addChildReferenceFor = function (file, transaction) {
             var _this = this;
             async.newTask(function (cb) {
-                return transaction.objectStore(FileDb._FILE_STORE).get(file.location).onsuccess = function (ev) {
+                return transaction.objectStore(FileDb._FILE_INFO_STORE).get(file.location).onsuccess = function (ev) {
                     var result = (ev.target).result;
                     if(typeof result === 'undefined') {
                         (ev.target).transaction.abort();
@@ -262,11 +255,11 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                         cb(result);
                     }
                 };
-            }).next(function (parentData) {
-                var parent = new File(parentData);
-                parent.addChild(file);
+            }).next(function (parentInfoData) {
+                var parentInfo = new FileInfo(parentInfoData);
+                parentInfo.addChild(file);
                 return function (cb) {
-                    return transaction.objectStore(FileDb._FILE_STORE).put(parent.getStoreObject()).onsuccess = cb;
+                    return transaction.objectStore(FileDb._FILE_INFO_STORE).put(parentInfo.getFileInfoData(), parentInfo.absolutePath).onsuccess = cb;
                 }
             }).done(function () {
                 return _this._env.log('\tSUCCESS: Added reference "%s" to parent "%s".', file.name, file.location);
@@ -276,7 +269,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
             var _this = this;
             var pathInfo = FileUtils.getPathInfo(absolutePath);
             async.newTask(function (cb) {
-                return transaction.objectStore(FileDb._FILE_STORE).get(pathInfo.location).onsuccess = function (ev) {
+                return transaction.objectStore(FileDb._FILE_INFO_STORE).get(pathInfo.location).onsuccess = function (ev) {
                     var result = (ev.target).result;
                     if(typeof (result) === 'undefined') {
                         (ev.target).transaction.abort();
@@ -284,11 +277,11 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                         cb(result);
                     }
                 };
-            }).next(function (parentData) {
-                var parent = new File(parentData);
-                parent.removeChild(pathInfo.name);
+            }).next(function (parentInfoData) {
+                var parentInfo = new FileInfo(parentInfoData);
+                parentInfo.removeChild(pathInfo.name);
                 return function (cb) {
-                    return transaction.objectStore(FileDb._FILE_STORE).put(parent.getStoreObject()).onsuccess = cb;
+                    return transaction.objectStore(FileDb._FILE_INFO_STORE).put(parentInfo.getFileInfoData(), parentInfo.absolutePath).onsuccess = cb;
                 }
             }).done(function () {
                 return _this._env.log('\tSUCCESS: Removed reference "%s" from parent "%s".', pathInfo.name, pathInfo.location);
@@ -297,13 +290,13 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
         FileDb.prototype._traverseWithAction = function (transaction, root, action) {
             var _this = this;
             root.forEachChild(function (c) {
-                return transaction.objectStore(FileDb._FILE_STORE).get(FileUtils.getAbsolutePath({
+                return transaction.objectStore(FileDb._FILE_INFO_STORE).get(FileUtils.getAbsolutePath({
                     name: c.name,
                     location: root.absolutePath
                 })).onsuccess = (function (ev) {
                     var result = (ev.target).result;
                     if(result) {
-                        _this._traverseWithAction(transaction, new File(result), action);
+                        _this._traverseWithAction(transaction, new FileInfo(result), action);
                     }
                 });
             });
@@ -312,7 +305,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
         FileDb.prototype._copy = function (source, destination, transaction) {
             var _this = this;
             return async.newTask(function (cb) {
-                return transaction.objectStore(FileDb._FILE_STORE).get(source).onsuccess = function (ev) {
+                return transaction.objectStore(FileDb._FILE_INFO_STORE).get(source).onsuccess = function (ev) {
                     var result = (ev.target).result;
                     if(typeof (result) === 'undefined') {
                         (ev.target).transaction.abort();
@@ -320,12 +313,12 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                     }
                     cb(result);
                 };
-            }).next(function (fileData) {
-                var root = new File(fileData);
+            }).next(function (fileInfoData) {
+                var root = new FileInfo(fileInfoData);
                 return function (cb) {
-                    return _this._traverseWithAction(transaction, root, function (file) {
-                        var isRoot = file.absolutePath === root.absolutePath;
-                        var oldFilePath = file.absolutePath;
+                    return _this._traverseWithAction(transaction, root, function (fileInfo) {
+                        var isRoot = fileInfo.absolutePath === root.absolutePath;
+                        var oldFilePath = fileInfo.absolutePath;
                         var newPathInfo = null;
 
                         if(isRoot) {
@@ -333,13 +326,13 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                         } else {
                             newPathInfo = FileUtils.getPathInfo(oldFilePath.replace(source, destination));
                         }
-                        file.name = newPathInfo.name;
-                        file.location = newPathInfo.location;
+                        fileInfo.name = newPathInfo.name;
+                        fileInfo.location = newPathInfo.location;
                         if(isRoot) {
-                            _this._addChildReferenceFor(file, transaction);
+                            _this._addChildReferenceFor(fileInfo, transaction);
                         }
-                        transaction.objectStore(FileDb._FILE_STORE).add(file.getStoreObject()).onsuccess = function (ev) {
-                            return cb(oldFilePath, file.absolutePath, transaction);
+                        transaction.objectStore(FileDb._FILE_INFO_STORE).add(fileInfo, fileInfo.absolutePath).onsuccess = function (ev) {
+                            return cb(oldFilePath, fileInfo.absolutePath, transaction);
                         };
                     });
                 }
@@ -350,7 +343,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
             absolutePath = FileUtils.normalizePath(absolutePath);
             this._env.log('INFO: Getting "%s" from database "%s"...', absolutePath, this.name);
             this._openDb().done(function (db) {
-                var request = db.transaction(FileDb._FILE_STORE, FileDb._READ_ONLY).objectStore(FileDb._FILE_STORE).get(absolutePath);
+                var request = db.transaction(FileDb._FILE_INFO_STORE, FileDb._READ_ONLY).objectStore(FileDb._FILE_INFO_STORE).get(absolutePath);
                 request.onsuccess = function (ev) {
                     if(typeof (request.result) === 'undefined') {
                         _this._env.log('\tERROR: No file found at path "%s" in database "%s".', absolutePath, _this.name);
@@ -368,7 +361,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                         _this._env.log('\tSUCCESS: Got "%s" from database "%s".', absolutePath, _this.name);
                         cb({
                             success: true,
-                            result: new File(request.result)
+                            result: new FileInfo(request.result)
                         });
                     }
                 };
@@ -381,50 +374,50 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                 };
             });
         };
-        FileDb.prototype.save = function (fileData, cb) {
+        FileDb.prototype.save = function (fileInfoData, cb) {
             var _this = this;
             if(!cb) {
                 cb = FileDb._NOOP;
             }
-            var file = new File(fileData);
+            var fileInfo = new FileInfo(fileInfoData);
             var transactionConfig = {
                 mode: FileDb._READ_WRITE,
                 initMsg: [
                     'INFO: Starting transaction to save "', 
-                    file.absolutePath, 
+                    fileInfo.absolutePath, 
                     '" to database "', 
                     this.name, 
                     '"...'
                 ].join(''),
                 successMsg: [
                     '\tSUCCESS: Transaction for saving "', 
-                    file.absolutePath, 
+                    fileInfo.absolutePath, 
                     '" to database "', 
                     this.name, 
                     '" completed.'
                 ].join(''),
                 abortMsg: [
                     '\tFAILURE: Transaction aborted while saving "', 
-                    file.absolutePath, 
+                    fileInfo.absolutePath, 
                     '" to database "', 
                     this.name, 
                     '".'
                 ].join(''),
                 errorMsg: [
                     '\tFAILURE: Could not save "', 
-                    file.absolutePath, 
+                    fileInfo.absolutePath, 
                     '" to database "', 
                     this.name, 
                     '".'
                 ].join('')
             };
             this._getTransaction(transactionConfig, cb).next(function (transaction) {
-                _this._addChildReferenceFor(file, transaction);
+                _this._addChildReferenceFor(fileInfo, transaction);
                 return function (cb) {
-                    return transaction.objectStore(FileDb._FILE_STORE).put(file.getStoreObject()).onsuccess = cb;
+                    return transaction.objectStore(FileDb._FILE_INFO_STORE).put(fileInfo.getFileInfoData(), fileInfo.absolutePath).onsuccess = cb;
                 }
             }).done(function () {
-                return _this._env.log('\tSUCCESS: Saved "%s" to database "%s".', file.absolutePath, _this.name);
+                return _this._env.log('\tSUCCESS: Saved "%s" to database "%s".', fileInfo.absolutePath, _this.name);
             });
         };
         FileDb.prototype.remove = function (absolutePath, cb) {
@@ -467,19 +460,19 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
             this._getTransaction(transactionConfig, cb).next(function (transaction) {
                 _this._removeChildReferenceFor(absolutePath, transaction);
                 return function (cb) {
-                    return transaction.objectStore(FileDb._FILE_STORE).get(absolutePath).onsuccess = function (ev) {
+                    return transaction.objectStore(FileDb._FILE_INFO_STORE).get(absolutePath).onsuccess = function (ev) {
                         var result = (ev.target).result;
                         if(typeof (result) === 'undefined') {
                             (ev.target).transaction.abort();
                         } else {
-                            cb(new File(result), transaction);
+                            cb(new FileInfo(result), transaction);
                         }
                     };
                 }
             }).next(function (root, transaction) {
                 return function (cb) {
                     return _this._traverseWithAction(transaction, root, function (child) {
-                        return transaction.objectStore(FileDb._FILE_STORE).delete(child.absolutePath).onsuccess = function (ev) {
+                        return transaction.objectStore(FileDb._FILE_INFO_STORE).delete(child.absolutePath).onsuccess = function (ev) {
                             return cb(child.absolutePath);
                         };
                     });
@@ -595,7 +588,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                 }
             }).next(function (source, destination, transaction) {
                 return function (cb) {
-                    return transaction.objectStore(FileDb._FILE_STORE).delete(source).onsuccess = function (ev) {
+                    return transaction.objectStore(FileDb._FILE_INFO_STORE).delete(source).onsuccess = function (ev) {
                         return cb(source, destination);
                     };
                 }

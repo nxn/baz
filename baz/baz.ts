@@ -2,7 +2,7 @@ import fs = module('./filedb');
 import async = module('./async');
 import ui = module('./tree-view');
 
-var bazSolution : IFileData = {
+var bazSolution : IFileInfoData = {
     name: 'baz.sln',
     type: 'application/vnd.baz.solution',
     location: '/',
@@ -10,7 +10,7 @@ var bazSolution : IFileData = {
     children: null
 }
 
-var bazProject : IFileData = {
+var bazProject : IFileInfoData = {
     name: 'baz.tsp',
     type: 'application/vnd.baz.project',
     location : '/baz.sln',
@@ -18,7 +18,7 @@ var bazProject : IFileData = {
     children: null
 }
 
-var bazTS : IFileData = {
+var bazTS : IFileInfoData = {
     name: 'baz.ts',
     type: 'text/vnd.ms-typescript',
     location: '/baz.sln/baz.tsp',
@@ -26,7 +26,7 @@ var bazTS : IFileData = {
     children: null
 }
 
-var bazJS : IFileData = {
+var bazJS : IFileInfoData = {
     name: 'baz.js',
     type: 'text/javascript',
     location: '/baz.sln/baz.tsp/baz.ts',
@@ -34,7 +34,7 @@ var bazJS : IFileData = {
     children: null
 }
 
-var bazCSS : IFileData = {
+var bazCSS : IFileInfoData = {
     name: 'baz.css',
     type: 'text/css',
     location: '/baz.sln/baz.tsp',
@@ -42,7 +42,7 @@ var bazCSS : IFileData = {
     children: null
 }
 
-var aceDir : IFileData = {
+var aceDir : IFileInfoData = {
     name: 'ace',
     type: 'application/vnd.baz.directory',
     location: '/baz.sln/baz.tsp',
@@ -50,14 +50,14 @@ var aceDir : IFileData = {
     children: null
 }
 
-var aceJS : IFileData = {
+var aceJS : IFileInfoData = {
     name: 'ace.js',
     type: 'text/javascript',
     location: '/baz.sln/baz.tsp/ace',
     content: null,
     children: null
 }
-var aceLong : IFileData = {
+var aceLong : IFileInfoData = {
     name: 'long ass filename right here homie.js',
     type: 'text/javascript',
     location: '/baz.sln/baz.tsp/ace',
@@ -65,7 +65,7 @@ var aceLong : IFileData = {
     children: null
 }
 
-var compilerProject : IFileData = {
+var compilerProject : IFileInfoData = {
     name: 'typescript-compiler.tsp',
     type: 'application/vnd.baz.project',
     location: '/baz.sln',
@@ -73,7 +73,7 @@ var compilerProject : IFileData = {
     children: null
 }
 
-var tscTS : IFileData = {
+var tscTS : IFileInfoData = {
     name: 'tsc.ts',
     type: 'text/vnd.ms-typescript',
     location: '/baz.sln/typescript-compiler.tsp',
@@ -82,7 +82,7 @@ var tscTS : IFileData = {
 }
 
 
-var libTS : IFileData = {
+var libTS : IFileInfoData = {
     name: 'lib.d.ts',
     type: 'text/vnd.ms-typescript',
     location: '/baz.sln/typescript-compiler.tsp',

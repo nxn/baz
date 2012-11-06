@@ -11,7 +11,7 @@ class FSTreeNode implements IFSTreeNode {
 
     private _db         : IFileDb;
     private _env        : IEnvironment;
-    private _file       : IFile;
+    private _file       : IFileInfo;
     private _$this      : JQuery;
     private _$parent    : JQuery;
     private _tree       : FSTreeView;
@@ -29,7 +29,7 @@ class FSTreeNode implements IFSTreeNode {
         })();
 
     constructor(
-        file            : IFile,
+        file            : IFileInfo,
         $parent         : JQuery,
         db              : IFileDb, 
         environment     : IEnvironment,

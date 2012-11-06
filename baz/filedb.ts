@@ -1,8 +1,17 @@
 /// <reference path="filedb.d.ts" />
 
 import async = module('./async');
+import utils = module('./utils');
 
-class File implements IFile {
+interface ITransactionConfig {
+    mode?       : string;
+    initMsg     : string;
+    errorMsg    : string;
+    abortMsg    : string;
+    successMsg  : string;
+}
+
+class FileInfo implements IFileInfo {
     private static _rxRepeatingSlash = /\/{2,}/g;
     private static _rxTrailingSlash = /(.+?)(?:\/*)$/;
 
@@ -13,19 +22,24 @@ class File implements IFile {
     content     : any;
     children    : IChildInfoDictionary;
     childCount  : number;
+    contentId   : string;
 
-    constructor(fileData : IFileData) {
-        this.name       = fileData.name;
-        this.location   = fileData.location;
-        this.type       = fileData.type;
-        this.content    = fileData.content;
-        this.children   = fileData.children || { };
+    constructor(fileInfoData : IFileInfoData) {
+        this.name       = fileInfoData.name;
+        this.location   = fileInfoData.location;
+        this.type       = fileInfoData.type;
+        this.contentId  = fileInfoData.contentId;
+        this.children   = fileInfoData.children || { };
 
         this.childCount = Object.getOwnPropertyNames(this.children).length;
     }
 
-    addChild(file : IChildInfo) {
-        this.children[file.name] = { name : file.name, type : file.type };
+    addChild(child : IChildInfo) {
+        this.children[child.name] = {
+            name        : child.name, 
+            type        : child.type, 
+            contentId   : child.contentId 
+        };
     }
 
     removeChild(filename) {
@@ -40,23 +54,14 @@ class File implements IFile {
         }
     }
 
-    getInfoObject() : IFileInfo {
-        return {
-            name        : this.name,
-            type        : this.type,
-            location    : this.location,
-            children    : this.children
-        }
-    }
-
-    getStoreObject() : IFileStoreObject{
+    getFileInfoData() : IFileInfoData{
         return {
             name            : this.name,
             location        : this.location,
             type            : this.type,
-            content         : this.content,
             children        : this.children,
-            absolutePath    : this.absolutePath
+            absolutePath    : this.absolutePath,
+            contentId       : this.contentId
         };
     }
 
@@ -114,12 +119,12 @@ module FileUtils {
 
     export function normalizePath(value : string) {
         return trimTrailingSlashes(
-            (value || "").trim().replace(File._rxRepeatingSlash, '/')
+            (value || "").trim().replace(FileInfo._rxRepeatingSlash, '/')
         );
     }
 
     export function trimTrailingSlashes(value : string) {
-        var result = File._rxTrailingSlash.exec((value || "").trim());
+        var result = FileInfo._rxTrailingSlash.exec((value || "").trim());
         if (result && result[1]) {
             value = result[1];
         }
@@ -140,19 +145,12 @@ module FileUtils {
     }
 }
 
-interface ITransactionConfig {
-    mode?       : string;
-    initMsg     : string;
-    errorMsg    : string;
-    abortMsg    : string;
-    successMsg  : string;
-}
-
 class FileDb implements IFileDb {
     private static _OPEN_DBS                    : { [dbName : string] : IDBDatabase; } = { };
     private static _NOOP                        = () => {};
     private static _INDEXEDDB                   = window.indexedDB;
-    private static _FILE_STORE                  = "files";
+    private static _FILE_INFO_STORE             = "file-infos";
+    private static _FILE_CONTENT_STORE          = "file-contents";
     private static _FILE_STORE_KEY              = "absolutePath";
     private static _FILE_STORE_NAME_INDEX       = "name";
     private static _READ_WRITE                  = "readwrite";
@@ -180,30 +178,27 @@ class FileDb implements IFileDb {
     private _initDb(db : IDBDatabase) {
         this._env.log(
             'INFO: Creating object store "%s" in database "%s"...', 
-            FileDb._FILE_STORE, 
+            FileDb._FILE_INFO_STORE, 
             db.name
         );
 
-        var fileStore = db.createObjectStore(
-            FileDb._FILE_STORE, 
-            { keyPath: FileDb._FILE_STORE_KEY }
-        );
+        var fileInfoStore = db.createObjectStore(FileDb._FILE_INFO_STORE);
 
-        fileStore.createIndex(
+        fileInfoStore.createIndex(
             FileDb._FILE_STORE_NAME_INDEX, 
             FileDb._FILE_STORE_NAME_INDEX, 
             { unique: false }
         );
 
-        var root : IFileData = {
+        var rootInfo = new FileInfo({
             name        : '',
             location    : '/',
             type        : 'application/vnd.baz.root',
-            content     : null,
-            children    : null
-        }
+            children    : null,
+            contentId   : null
+        });
 
-        fileStore.put(new File(root).getStoreObject())
+        fileInfoStore.put(rootInfo.getFileInfoData(), rootInfo.absolutePath)
             .onerror = (ev) => {
                 this._env.log('\tFAILURE: Could not create ROOT in database "%s".', this.name)
             };
@@ -251,7 +246,7 @@ class FileDb implements IFileDb {
 
     private _getTransaction(config : ITransactionConfig, cb : (IResponse) => any) {
         return this._openDb().next((db : IDBDatabase) => {
-            var transaction = db.transaction(FileDb._FILE_STORE, config.mode || FileDb._READ_ONLY);
+            var transaction = db.transaction(FileDb._FILE_INFO_STORE, config.mode || FileDb._READ_ONLY);
 
             this._env.log(config.initMsg);
 
@@ -274,9 +269,9 @@ class FileDb implements IFileDb {
         });
     }
 
-    private _addChildReferenceFor(file : IFile, transaction : IDBTransaction) {
+    private _addChildReferenceFor(file : IFileInfo, transaction : IDBTransaction) {
         async.newTask(cb => transaction
-            .objectStore(FileDb._FILE_STORE)
+            .objectStore(FileDb._FILE_INFO_STORE)
             .get(file.location)
             .onsuccess = (ev) => {
                 var result = (<any> ev.target).result;
@@ -284,15 +279,16 @@ class FileDb implements IFileDb {
                 if (typeof result === 'undefined') {
                     (<any> ev.target).transaction.abort();
                 }
+
                 else cb(result);
             }
-        ).next((parentData : IFileData) => {
-            var parent = new File(parentData);
-            parent.addChild(file);
+        ).next((parentInfoData : IFileInfoData) => {
+            var parentInfo = new FileInfo(parentInfoData);
+            parentInfo.addChild(file);
 
             return cb => transaction
-                .objectStore(FileDb._FILE_STORE)
-                .put(parent.getStoreObject())
+                .objectStore(FileDb._FILE_INFO_STORE)
+                .put(parentInfo.getFileInfoData(), parentInfo.absolutePath)
                 .onsuccess = cb;
         }).done(() =>
             this._env.log(
@@ -307,7 +303,7 @@ class FileDb implements IFileDb {
         var pathInfo = FileUtils.getPathInfo(absolutePath);
 
         async.newTask(cb => transaction
-            .objectStore(FileDb._FILE_STORE)
+            .objectStore(FileDb._FILE_INFO_STORE)
             .get(pathInfo.location)
             .onsuccess = (ev) => {
                 var result = (<any> ev.target).result;
@@ -317,14 +313,14 @@ class FileDb implements IFileDb {
                 } 
                 else cb(result);
             }
-        ).next((parentData : IFileData) => {
-            var parent = new File(parentData);
+        ).next((parentInfoData : IFileInfoData) => {
+            var parentInfo = new FileInfo(parentInfoData);
 
-            parent.removeChild(pathInfo.name);
+            parentInfo.removeChild(pathInfo.name);
 
             return cb => transaction
-                .objectStore(FileDb._FILE_STORE)
-                .put(parent.getStoreObject())
+                .objectStore(FileDb._FILE_INFO_STORE)
+                .put(parentInfo.getFileInfoData(), parentInfo.absolutePath)
                 .onsuccess = cb;
             }
         ).done(() =>
@@ -338,11 +334,11 @@ class FileDb implements IFileDb {
 
     private _traverseWithAction(
         transaction : IDBTransaction,
-        root        : IFile, 
-        action      : (file : IFile) => void
+        root        : FileInfo, 
+        action      : (file : FileInfo) => void
     ) {
         root.forEachChild(c => transaction
-            .objectStore(FileDb._FILE_STORE)
+            .objectStore(FileDb._FILE_INFO_STORE)
             .get(
                 FileUtils.getAbsolutePath({ 
                     name    : c.name, 
@@ -350,10 +346,10 @@ class FileDb implements IFileDb {
                 })
             )
             .onsuccess = (ev => {
-                var result : IFileData = (<any> ev.target).result;
+                var result : IFileInfoData = (<any> ev.target).result;
 
                 if (result) {
-                    this._traverseWithAction(transaction, new File(result), action);
+                    this._traverseWithAction(transaction, new FileInfo(result), action);
                 }
             })
         );
@@ -367,7 +363,7 @@ class FileDb implements IFileDb {
         transaction : IDBTransaction
     ) : ITask {
         return async.newTask(cb => transaction
-            .objectStore(FileDb._FILE_STORE)
+            .objectStore(FileDb._FILE_INFO_STORE)
             .get(source)
             .onsuccess = (ev) => {
                 var result = (<any> ev.target).result;
@@ -380,13 +376,13 @@ class FileDb implements IFileDb {
                 cb(result);
             }
         )
-        .next((fileData : IFileData) => {
+        .next((fileInfoData : IFileInfoData) => {
             // Traverse the file and its children updating, saving them to their new destinations
-            var root = new File(fileData);
+            var root = new FileInfo(fileInfoData);
 
-            return cb => this._traverseWithAction(transaction, root, (file : IFile) => {
-                var isRoot = file.absolutePath === root.absolutePath
-                    , oldFilePath = file.absolutePath
+            return cb => this._traverseWithAction(transaction, root, (fileInfo : FileInfo) => {
+                var isRoot = fileInfo.absolutePath === root.absolutePath
+                    , oldFilePath = fileInfo.absolutePath
                     , newPathInfo = null;
 
                 if (isRoot) {
@@ -396,17 +392,17 @@ class FileDb implements IFileDb {
                     newPathInfo = FileUtils.getPathInfo(oldFilePath.replace(source, destination));
                 }
 
-                file.name      = newPathInfo.name;
-                file.location  = newPathInfo.location;
+                fileInfo.name      = newPathInfo.name;
+                fileInfo.location  = newPathInfo.location;
 
                 if (isRoot) {
-                    this._addChildReferenceFor(file, transaction);
+                    this._addChildReferenceFor(fileInfo, transaction);
                 }
 
                 transaction
-                    .objectStore(FileDb._FILE_STORE)
-                    .add(file.getStoreObject()) // use add to prevent overwriting a node
-                    .onsuccess = ev => cb(oldFilePath, file.absolutePath, transaction)
+                    .objectStore(FileDb._FILE_INFO_STORE)
+                    .add(fileInfo, fileInfo.absolutePath) // use add to prevent overwriting a node
+                    .onsuccess = ev => cb(oldFilePath, fileInfo.absolutePath, transaction)
             });
         });
     }
@@ -417,8 +413,8 @@ class FileDb implements IFileDb {
         this._env.log('INFO: Getting "%s" from database "%s"...', absolutePath, this.name);
 
         this._openDb().done((db : IDBDatabase) => {
-            var request = db.transaction(FileDb._FILE_STORE, FileDb._READ_ONLY)
-                            .objectStore(FileDb._FILE_STORE)
+            var request = db.transaction(FileDb._FILE_INFO_STORE, FileDb._READ_ONLY)
+                            .objectStore(FileDb._FILE_INFO_STORE)
                             .get(absolutePath);
 
             request.onsuccess = (ev) => {
@@ -428,7 +424,7 @@ class FileDb implements IFileDb {
                 }
                 else {
                     this._env.log('\tSUCCESS: Got "%s" from database "%s".', absolutePath, this.name);
-                    cb({ success: true, result: new File(request.result) });
+                    cb({ success: true, result: new FileInfo(request.result) });
                 }
             }
 
@@ -439,33 +435,33 @@ class FileDb implements IFileDb {
         });
     }
 
-    save(fileData : IFileData, cb? : (IResponse) => any) {
+    save(fileInfoData : IFileInfoData, cb? : (IResponse) => any) {
         if (!cb) {
             cb = FileDb._NOOP;
         }
 
-        var file = new File(fileData);
+        var fileInfo = new FileInfo(fileInfoData);
 
         var transactionConfig : ITransactionConfig = {
             mode        : FileDb._READ_WRITE,
-            initMsg     : ['INFO: Starting transaction to save "', file.absolutePath, '" to database "', this.name, '"...'].join(''),
-            successMsg  : ['\tSUCCESS: Transaction for saving "', file.absolutePath, '" to database "', this.name, '" completed.'].join(''),
-            abortMsg    : ['\tFAILURE: Transaction aborted while saving "', file.absolutePath, '" to database "', this.name, '".'].join(''),
-            errorMsg    : ['\tFAILURE: Could not save "', file.absolutePath, '" to database "', this.name, '".'].join('')
+            initMsg     : ['INFO: Starting transaction to save "', fileInfo.absolutePath, '" to database "', this.name, '"...'].join(''),
+            successMsg  : ['\tSUCCESS: Transaction for saving "', fileInfo.absolutePath, '" to database "', this.name, '" completed.'].join(''),
+            abortMsg    : ['\tFAILURE: Transaction aborted while saving "', fileInfo.absolutePath, '" to database "', this.name, '".'].join(''),
+            errorMsg    : ['\tFAILURE: Could not save "', fileInfo.absolutePath, '" to database "', this.name, '".'].join('')
         };
 
         this._getTransaction(transactionConfig, cb)
             .next((transaction : IDBTransaction) => {
-                this._addChildReferenceFor(file, transaction);
+                this._addChildReferenceFor(fileInfo, transaction);
 
                 return cb =>
                     transaction
-                        .objectStore(FileDb._FILE_STORE)
-                        .put(file.getStoreObject())
+                        .objectStore(FileDb._FILE_INFO_STORE)
+                        .put(fileInfo.getFileInfoData(), fileInfo.absolutePath)
                         .onsuccess = cb
             })
             .done(() => 
-                this._env.log('\tSUCCESS: Saved "%s" to database "%s".', file.absolutePath, this.name);
+                this._env.log('\tSUCCESS: Saved "%s" to database "%s".', fileInfo.absolutePath, this.name);
             );
     }
 
@@ -489,7 +485,7 @@ class FileDb implements IFileDb {
                 this._removeChildReferenceFor(absolutePath, transaction);
 
                 return cb => transaction
-                    .objectStore(FileDb._FILE_STORE)
+                    .objectStore(FileDb._FILE_INFO_STORE)
                     .get(absolutePath)
                     .onsuccess = (ev) => {
                         var result = (<any> ev.target).result;
@@ -497,15 +493,15 @@ class FileDb implements IFileDb {
                         if (typeof(result) === 'undefined') {
                             (<any> ev.target).transaction.abort();
                         }
-                        else cb(new File(result), transaction);
+                        else cb(new FileInfo(result), transaction);
                     }
             })
-            .next((root : IFile, transaction : IDBTransaction) => {
+            .next((root : FileInfo, transaction : IDBTransaction) => {
                 return cb => this._traverseWithAction(
                     transaction,
                     root,
-                    (child : IFile) => transaction
-                        .objectStore(FileDb._FILE_STORE)
+                    (child : FileInfo) => transaction
+                        .objectStore(FileDb._FILE_INFO_STORE)
                         .delete(child.absolutePath)
                         .onsuccess = ev => cb(child.absolutePath)
                 );
@@ -565,7 +561,7 @@ class FileDb implements IFileDb {
             })
             .next((source : string, destination : string, transaction : IDBTransaction) => cb =>
                 transaction
-                    .objectStore(FileDb._FILE_STORE)
+                    .objectStore(FileDb._FILE_INFO_STORE)
                     .delete(source)
                     .onsuccess = ev => cb(source, destination)
             )

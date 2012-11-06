@@ -1,37 +1,33 @@
+interface IPathInfo {
+    name        : string;
+    location    : string;
+}
+
 interface IChildInfo {
-    name : string;
-    type : string;
+    name        : string;
+    type        : string;
+    contentId   : string;
 }
 
 interface IChildInfoDictionary {
     [filename : string] : IChildInfo;
 }
 
-interface IPathInfo {
-    name        : string;
-    location    : string;
-}
-
 interface IFileInfo extends IChildInfo {
-    location : string;
-    children : IChildInfoDictionary;
-}
-
-interface IFileData extends IFileInfo {
-    content     : any;
-}
-
-interface IFileStoreObject extends IFileData {
-    absolutePath : string;
-}
-
-interface IFile extends IFileStoreObject {
-    size        : number;
-    childCount  : number;
-
+    location        : string;
+    absolutePath    : string;
+    children        : IChildInfoDictionary;
+    size            : number;
+    childCount      : number;
     forEachChild(fn : (child : IChildInfo) => any) : void;
-    getStoreObject() : IFileStoreObject;
-    getInfoObject() : IFileInfo;
+}
+
+interface IFileInfoData {
+    name            : string;
+    type            : string;
+    location        : string;
+    contentId?      : string;
+    children?       : IChildInfoDictionary;
 }
 
 interface IFileDbConfig {
@@ -53,7 +49,7 @@ interface IFileDb {
     utils               : IFileUtils;
 
     read(absolutePath : string, cb : (IResponse) => any);
-    save(file : IFileData, cb? : (IResponse) => any);
+    save(file : IFileInfoData, cb? : (IResponse) => any);
     remove(absolutePath : string, cb? : (IResponse) => any);
     copy(source : string, destination : string, cb? : (IResponse) => any);
     move(source : string, destination : string, cb? : (IResponse) => any);   
