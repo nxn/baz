@@ -1,15 +1,16 @@
-define(["require", "exports", './async'], function(require, exports, __async__) {
+define(["require", "exports", './async', './guid'], function(require, exports, __async__, __g__) {
     var async = __async__;
 
-    
+    var g = __g__;
+
     var FileInfo = (function () {
         function FileInfo(fileInfoData) {
             this.name = fileInfoData.name;
             this.location = fileInfoData.location;
             this.type = fileInfoData.type;
-            this.contentId = fileInfoData.contentId;
             this.children = fileInfoData.children || {
             };
+            this.contentId = fileInfoData.contentId ? new g.Guid(fileInfoData.contentId) : g.Guid.generate();
             this.childCount = Object.getOwnPropertyNames(this.children).length;
         }
         FileInfo._rxRepeatingSlash = /\/{2,}/g;
@@ -37,7 +38,14 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                 type: this.type,
                 children: this.children,
                 absolutePath: this.absolutePath,
-                contentId: this.contentId
+                contentId: this.contentId.value
+            };
+        };
+        FileInfo.prototype.getChildInfoData = function () {
+            return {
+                name: this.name,
+                type: this.type,
+                contentId: this.contentId.value
             };
         };
         Object.defineProperty(FileInfo.prototype, "name", {
@@ -164,24 +172,6 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
             enumerable: true,
             configurable: true
         });
-        FileDb.prototype._initDb = function (db) {
-            var _this = this;
-            this._env.log('INFO: Creating object store "%s" in database "%s"...', FileDb._FILE_INFO_STORE, db.name);
-            var fileInfoStore = db.createObjectStore(FileDb._FILE_INFO_STORE);
-            fileInfoStore.createIndex(FileDb._FILE_STORE_NAME_INDEX, FileDb._FILE_STORE_NAME_INDEX, {
-                unique: false
-            });
-            var rootInfo = new FileInfo({
-                name: '',
-                location: '/',
-                type: 'application/vnd.baz.root',
-                children: null,
-                contentId: null
-            });
-            fileInfoStore.put(rootInfo.getFileInfoData(), rootInfo.absolutePath).onerror = function (ev) {
-                _this._env.log('\tFAILURE: Could not create ROOT in database "%s".', _this.name);
-            };
-        };
         FileDb.prototype._openDb = function () {
             var _this = this;
             return async.newTask(function (cb) {
@@ -213,10 +203,36 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                 };
             });
         };
+        FileDb.prototype._initDb = function (db) {
+            var _this = this;
+            this._env.log('INFO: Creating object store "%s" in database "%s"...', FileDb._FILE_CONTENT_STORE, db.name);
+            var fileContentStore = db.createObjectStore(FileDb._FILE_CONTENT_STORE);
+            this._env.log('INFO: Creating object store "%s" in database "%s"...', FileDb._FILE_INFO_STORE, db.name);
+            var fileInfoStore = db.createObjectStore(FileDb._FILE_INFO_STORE);
+            fileInfoStore.createIndex(FileDb._FILE_STORE_NAME_INDEX, FileDb._FILE_STORE_NAME_INDEX, {
+                unique: false
+            });
+            var rootInfo = new FileInfo({
+                name: '',
+                location: '/',
+                type: 'application/vnd.baz.root',
+                children: null,
+                contentId: null
+            });
+            fileInfoStore.put(rootInfo.getFileInfoData(), rootInfo.absolutePath).onerror = function (ev) {
+                _this._env.log('\tFAILURE: Could not create ROOT in database "%s".', _this.name);
+            };
+        };
         FileDb.prototype._getTransaction = function (config, cb) {
             var _this = this;
             return this._openDb().next(function (db) {
-                var transaction = db.transaction(FileDb._FILE_INFO_STORE, config.mode || FileDb._READ_ONLY);
+                var stores = config.stores;
+                if(!stores || config.stores.length < 1) {
+                    stores = [
+                        FileDb._FILE_INFO_STORE
+                    ];
+                }
+                var transaction = db.transaction(stores, config.mode || FileDb._READ_ONLY);
                 _this._env.log(config.initMsg);
                 transaction.onerror = function (ev) {
                     _this._env.log(config.errorMsg);
@@ -257,7 +273,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                 };
             }).next(function (parentInfoData) {
                 var parentInfo = new FileInfo(parentInfoData);
-                parentInfo.addChild(file);
+                parentInfo.addChild(file.getChildInfoData());
                 return function (cb) {
                     return transaction.objectStore(FileDb._FILE_INFO_STORE).put(parentInfo.getFileInfoData(), parentInfo.absolutePath).onsuccess = cb;
                 }
@@ -302,7 +318,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
             });
             action(root);
         };
-        FileDb.prototype._copy = function (source, destination, transaction) {
+        FileDb.prototype._cp = function (source, destination, transaction) {
             var _this = this;
             return async.newTask(function (cb) {
                 return transaction.objectStore(FileDb._FILE_INFO_STORE).get(source).onsuccess = function (ev) {
@@ -331,14 +347,14 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                         if(isRoot) {
                             _this._addChildReferenceFor(fileInfo, transaction);
                         }
-                        transaction.objectStore(FileDb._FILE_INFO_STORE).add(fileInfo, fileInfo.absolutePath).onsuccess = function (ev) {
+                        transaction.objectStore(FileDb._FILE_INFO_STORE).add(fileInfo.getFileInfoData(), fileInfo.absolutePath).onsuccess = function (ev) {
                             return cb(oldFilePath, fileInfo.absolutePath, transaction);
                         };
                     });
                 }
             });
         };
-        FileDb.prototype.read = function (absolutePath, cb) {
+        FileDb.prototype.getFileInfo = function (absolutePath, cb) {
             var _this = this;
             absolutePath = FileUtils.normalizePath(absolutePath);
             this._env.log('INFO: Getting "%s" from database "%s"...', absolutePath, this.name);
@@ -374,7 +390,86 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                 };
             });
         };
-        FileDb.prototype.save = function (fileInfoData, cb) {
+        FileDb.prototype.getFileContent = function (identifier, cb) {
+            var _this = this;
+            var task;
+            var transactionConfig = {
+                mode: FileDb._READ_ONLY,
+                initMsg: [
+                    'INFO: Starting transaction to get file contents of "', 
+                    identifier, 
+                    '" from database "', 
+                    this.name, 
+                    '"...'
+                ].join(''),
+                successMsg: [
+                    '\tSUCCESS: Transaction for getting file contents of "', 
+                    identifier, 
+                    '" from database "', 
+                    this.name, 
+                    '" completed.'
+                ].join(''),
+                abortMsg: [
+                    '\tFAILURE: Transaction aborted while getting file contents of "', 
+                    identifier, 
+                    '" from database "', 
+                    this.name, 
+                    '".'
+                ].join(''),
+                errorMsg: [
+                    '\tFAILURE: Could not get "', 
+                    identifier, 
+                    '" from database "', 
+                    this.name, 
+                    '".'
+                ].join('')
+            };
+
+            if(typeof identifier === 'string') {
+                transactionConfig.stores = [
+                    FileDb._FILE_INFO_STORE, 
+                    FileDb._FILE_CONTENT_STORE
+                ];
+                identifier = FileUtils.normalizePath(identifier);
+                task = this._getTransaction(transactionConfig, cb).next(function (transaction) {
+                    return function (cb) {
+                        return transaction.objectStore(FileDb._FILE_INFO_STORE).get(identifier).onsuccess = function (ev) {
+                            var fileInfoData = (ev.target).result;
+                            cb(fileInfoData.contentId, transaction);
+                        };
+                    }
+                });
+            } else {
+                if(identifier instanceof g.Guid) {
+                    transactionConfig.stores = [
+                        FileDb._FILE_CONTENT_STORE
+                    ];
+                    task = this._getTransaction(transactionConfig, cb).next(function (transaction) {
+                        return function (cb) {
+                            return cb((identifier).value, transaction);
+                        }
+                    });
+                } else {
+                    cb({
+                        success: false,
+                        error: [
+                            'Cannot not resolve file content with identifier "', 
+                            identifier, 
+                            '".'
+                        ].join('')
+                    });
+                    return;
+                }
+            }
+            task.done(function (contentId, transaction) {
+                if(contentId) {
+                    transaction.objectStore(FileDb._FILE_CONTENT_STORE).get(contentId);
+                } else {
+                    _this._env.log('\tWARNING: Cannot resolve file content with identifier "%s" (contentId: "%s").', identifier, contentId);
+                }
+            });
+        };
+        FileDb.prototype.putFileInfo = function (fileInfoData, cb) {
             var _this = this;
             if(!cb) {
                 cb = FileDb._NOOP;
@@ -420,7 +515,9 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                 return _this._env.log('\tSUCCESS: Saved "%s" to database "%s".', fileInfo.absolutePath, _this.name);
             });
         };
-        FileDb.prototype.remove = function (absolutePath, cb) {
+        FileDb.prototype.putFileContent = function (data, cb) {
+        };
+        FileDb.prototype.rm = function (absolutePath, cb) {
             var _this = this;
             if(!cb) {
                 cb = FileDb._NOOP;
@@ -481,7 +578,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
                 return _this._env.log('\tSUCCESS: Removing item "%s" from database "%s".', path, _this.name);
             });
         };
-        FileDb.prototype.copy = function (source, destination, cb) {
+        FileDb.prototype.cp = function (source, destination, cb) {
             var _this = this;
             if(!cb) {
                 cb = FileDb._NOOP;
@@ -529,13 +626,13 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
             };
             this._getTransaction(transactionConfig, cb).next(function (transaction) {
                 return function (cb) {
-                    return _this._copy(source, destination, transaction).done(cb);
+                    return _this._cp(source, destination, transaction).done(cb);
                 }
             }).done(function (source, destination, transaction) {
                 return _this._env.log('\tSUCCESS: Copied "%s" to "%s".', source, destination);
             });
         };
-        FileDb.prototype.move = function (source, destination, cb) {
+        FileDb.prototype.mv = function (source, destination, cb) {
             var _this = this;
             if(!cb) {
                 cb = FileDb._NOOP;
@@ -584,7 +681,7 @@ define(["require", "exports", './async'], function(require, exports, __async__) 
             this._getTransaction(transactionConfig, cb).next(function (transaction) {
                 _this._removeChildReferenceFor(source, transaction);
                 return function (cb) {
-                    return _this._copy(source, destination, transaction).done(cb);
+                    return _this._cp(source, destination, transaction).done(cb);
                 }
             }).next(function (source, destination, transaction) {
                 return function (cb) {

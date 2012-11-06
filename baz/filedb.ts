@@ -1,10 +1,11 @@
 /// <reference path="filedb.d.ts" />
 
 import async = module('./async');
-import utils = module('./utils');
+import g = module('./guid');
 
 interface ITransactionConfig {
     mode?       : string;
+    stores?     : string[];
     initMsg     : string;
     errorMsg    : string;
     abortMsg    : string;
@@ -22,14 +23,14 @@ class FileInfo implements IFileInfo {
     content     : any;
     children    : IChildInfoDictionary;
     childCount  : number;
-    contentId   : string;
+    contentId   : IGuid;
 
     constructor(fileInfoData : IFileInfoData) {
         this.name       = fileInfoData.name;
         this.location   = fileInfoData.location;
         this.type       = fileInfoData.type;
-        this.contentId  = fileInfoData.contentId;
         this.children   = fileInfoData.children || { };
+        this.contentId  = fileInfoData.contentId ? new g.Guid(fileInfoData.contentId) : g.Guid.generate();
 
         this.childCount = Object.getOwnPropertyNames(this.children).length;
     }
@@ -54,15 +55,23 @@ class FileInfo implements IFileInfo {
         }
     }
 
-    getFileInfoData() : IFileInfoData{
+    getFileInfoData() : IFileInfoData {
         return {
             name            : this.name,
             location        : this.location,
             type            : this.type,
             children        : this.children,
             absolutePath    : this.absolutePath,
-            contentId       : this.contentId
+            contentId       : this.contentId.value
         };
+    }
+
+    getChildInfoData() : IChildInfo {
+        return {
+            name        : this.name,
+            type        : this.type,
+            contentId   : this.contentId.value
+        }
     }
 
     get name() {
@@ -175,35 +184,6 @@ class FileDb implements IFileDb {
         this._env       = config.environment    || FileDb._DEFAULT_ENV;
     }
 
-    private _initDb(db : IDBDatabase) {
-        this._env.log(
-            'INFO: Creating object store "%s" in database "%s"...', 
-            FileDb._FILE_INFO_STORE, 
-            db.name
-        );
-
-        var fileInfoStore = db.createObjectStore(FileDb._FILE_INFO_STORE);
-
-        fileInfoStore.createIndex(
-            FileDb._FILE_STORE_NAME_INDEX, 
-            FileDb._FILE_STORE_NAME_INDEX, 
-            { unique: false }
-        );
-
-        var rootInfo = new FileInfo({
-            name        : '',
-            location    : '/',
-            type        : 'application/vnd.baz.root',
-            children    : null,
-            contentId   : null
-        });
-
-        fileInfoStore.put(rootInfo.getFileInfoData(), rootInfo.absolutePath)
-            .onerror = (ev) => {
-                this._env.log('\tFAILURE: Could not create ROOT in database "%s".', this.name)
-            };
-    }
-
     private _openDb() {
         return async.newTask(cb => {
             if (FileDb._OPEN_DBS.hasOwnProperty(this.name)) {
@@ -244,9 +224,51 @@ class FileDb implements IFileDb {
         });
     }
 
+    private _initDb(db : IDBDatabase) {
+        this._env.log(
+            'INFO: Creating object store "%s" in database "%s"...', 
+            FileDb._FILE_CONTENT_STORE, 
+            db.name
+        );
+        var fileContentStore = db.createObjectStore(FileDb._FILE_CONTENT_STORE);
+
+        this._env.log(
+            'INFO: Creating object store "%s" in database "%s"...', 
+            FileDb._FILE_INFO_STORE, 
+            db.name
+        );
+        var fileInfoStore = db.createObjectStore(FileDb._FILE_INFO_STORE);
+
+        fileInfoStore.createIndex(
+            FileDb._FILE_STORE_NAME_INDEX, 
+            FileDb._FILE_STORE_NAME_INDEX, 
+            { unique: false }
+        );
+
+        var rootInfo = new FileInfo({
+            name        : '',
+            location    : '/',
+            type        : 'application/vnd.baz.root',
+            children    : null,
+            contentId   : null
+        });
+
+        fileInfoStore
+            .put(rootInfo.getFileInfoData(), rootInfo.absolutePath)
+            .onerror = (ev) => {
+                this._env.log('\tFAILURE: Could not create ROOT in database "%s".', this.name)
+            };
+    }
+
     private _getTransaction(config : ITransactionConfig, cb : (IResponse) => any) {
         return this._openDb().next((db : IDBDatabase) => {
-            var transaction = db.transaction(FileDb._FILE_INFO_STORE, config.mode || FileDb._READ_ONLY);
+            var stores = config.stores;
+
+            if (!stores || config.stores.length < 1) {
+                stores = [FileDb._FILE_INFO_STORE];
+            }
+
+            var transaction = db.transaction(stores, config.mode || FileDb._READ_ONLY);
 
             this._env.log(config.initMsg);
 
@@ -269,7 +291,7 @@ class FileDb implements IFileDb {
         });
     }
 
-    private _addChildReferenceFor(file : IFileInfo, transaction : IDBTransaction) {
+    private _addChildReferenceFor(file : FileInfo, transaction : IDBTransaction) {
         async.newTask(cb => transaction
             .objectStore(FileDb._FILE_INFO_STORE)
             .get(file.location)
@@ -284,7 +306,7 @@ class FileDb implements IFileDb {
             }
         ).next((parentInfoData : IFileInfoData) => {
             var parentInfo = new FileInfo(parentInfoData);
-            parentInfo.addChild(file);
+            parentInfo.addChild(file.getChildInfoData());
 
             return cb => transaction
                 .objectStore(FileDb._FILE_INFO_STORE)
@@ -357,7 +379,7 @@ class FileDb implements IFileDb {
         action(root);
     }
 
-    private _copy(
+    private _cp(
         source      : string, 
         destination : string, 
         transaction : IDBTransaction
@@ -401,13 +423,13 @@ class FileDb implements IFileDb {
 
                 transaction
                     .objectStore(FileDb._FILE_INFO_STORE)
-                    .add(fileInfo, fileInfo.absolutePath) // use add to prevent overwriting a node
+                    .add(fileInfo.getFileInfoData(), fileInfo.absolutePath) // use add to prevent overwriting a node
                     .onsuccess = ev => cb(oldFilePath, fileInfo.absolutePath, transaction)
             });
         });
     }
 
-    read(absolutePath : string, cb : (IResponse) => any) {
+    getFileInfo(absolutePath : string, cb : (IResponse) => any) {
         absolutePath = FileUtils.normalizePath(absolutePath);
 
         this._env.log('INFO: Getting "%s" from database "%s"...', absolutePath, this.name);
@@ -435,7 +457,63 @@ class FileDb implements IFileDb {
         });
     }
 
-    save(fileInfoData : IFileInfoData, cb? : (IResponse) => any) {
+    getFileContent(contentId : g.Guid, cb : (IResponse) => any) : void;
+    getFileContent(absolutePath : string, cb : (IResponse) => any) : void;
+    getFileContent(identifier : any, cb : (IResponse) => any) : void {
+        var task : ITask,
+            transactionConfig : ITransactionConfig = {
+                mode        : FileDb._READ_ONLY,
+                initMsg     : ['INFO: Starting transaction to get file contents of "', identifier, '" from database "', this.name, '"...'].join(''),
+                successMsg  : ['\tSUCCESS: Transaction for getting file contents of "', identifier, '" from database "', this.name, '" completed.'].join(''),
+                abortMsg    : ['\tFAILURE: Transaction aborted while getting file contents of "', identifier, '" from database "', this.name, '".'].join(''),
+                errorMsg    : ['\tFAILURE: Could not get "', identifier, '" from database "', this.name, '".'].join('')
+            };
+
+        // Resolve transaction and contentId based on type of identifier provided
+        if (typeof identifier === 'string') {
+            transactionConfig.stores = [FileDb._FILE_INFO_STORE, FileDb._FILE_CONTENT_STORE];
+            identifier = FileUtils.normalizePath(identifier);
+
+            task = this._getTransaction(transactionConfig, cb)
+                .next((transaction : IDBTransaction) =>
+                    cb => transaction
+                        .objectStore(FileDb._FILE_INFO_STORE)
+                        .get(identifier)
+                        .onsuccess = ev => {
+                            var fileInfoData : IFileInfoData = (<any> ev.target).result;
+                            cb(fileInfoData.contentId, transaction);
+                        }
+                );
+        }
+
+        else if (identifier instanceof g.Guid) {
+            transactionConfig.stores = [FileDb._FILE_CONTENT_STORE];
+            task = this._getTransaction(transactionConfig, cb)
+                .next((transaction : IDBTransaction) => cb => cb((<g.Guid> identifier).value, transaction));
+        }
+
+        else {
+            cb({ success: false, error: ['Cannot not resolve file content with identifier "', identifier, '".'].join('')});
+            return;
+        }
+
+        task.done((contentId : string, transaction : IDBTransaction) => {
+            if (contentId) {
+                // Let the default 'oncomplete' transaction handler forward the response to our callback
+                // (i.e., no need to any completion/success handling here)
+                transaction.objectStore(FileDb._FILE_CONTENT_STORE).get(contentId)
+            }
+            else {
+                this._env.log(
+                    '\tWARNING: Cannot resolve file content with identifier "%s" (contentId: "%s").',
+                    identifier,
+                    contentId
+                );
+            }
+        });
+    }
+
+    putFileInfo(fileInfoData : IFileInfoData, cb? : (IResponse) => any) {
         if (!cb) {
             cb = FileDb._NOOP;
         }
@@ -461,11 +539,14 @@ class FileDb implements IFileDb {
                         .onsuccess = cb
             })
             .done(() => 
-                this._env.log('\tSUCCESS: Saved "%s" to database "%s".', fileInfo.absolutePath, this.name);
+                this._env.log('\tSUCCESS: Saved "%s" to database "%s".', fileInfo.absolutePath, this.name)
             );
     }
 
-    remove(absolutePath : string, cb? : (IResponse) => any) {
+    putFileContent(data : any, cb? : (IResponse) => any) {
+    }
+
+    rm(absolutePath : string, cb? : (IResponse) => any) {
         if (!cb) {
             cb = FileDb._NOOP;
         }
@@ -515,7 +596,7 @@ class FileDb implements IFileDb {
             );
     }
 
-    copy(source : string, destination : string, cb? : (IResponse) => any) {
+    cp(source : string, destination : string, cb? : (IResponse) => any) {
         if (!cb) {
             cb = FileDb._NOOP;
         }
@@ -532,13 +613,13 @@ class FileDb implements IFileDb {
         };
 
         this._getTransaction(transactionConfig, cb)
-            .next((transaction : IDBTransaction) => cb => this._copy(source, destination, transaction).done(cb))
+            .next((transaction : IDBTransaction) => cb => this._cp(source, destination, transaction).done(cb))
             .done((source : string, destination : string, transaction : IDBTransaction) =>
                 this._env.log('\tSUCCESS: Copied "%s" to "%s".', source, destination)
             );
     }
 
-    move(source : string, destination : string, cb? : (IResponse) => any) {
+    mv(source : string, destination : string, cb? : (IResponse) => any) {
         if (!cb) {
             cb = FileDb._NOOP;
         }
@@ -557,7 +638,7 @@ class FileDb implements IFileDb {
         this._getTransaction(transactionConfig, cb)
             .next((transaction : IDBTransaction) => {
                 this._removeChildReferenceFor(source, transaction);
-                return cb => this._copy(source, destination, transaction).done(cb)
+                return cb => this._cp(source, destination, transaction).done(cb)
             })
             .next((source : string, destination : string, transaction : IDBTransaction) => cb =>
                 transaction

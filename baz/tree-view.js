@@ -1,7 +1,7 @@
-define(["require", "exports", "./async", "./utils"], function(require, exports, __async__, __utils__) {
+define(["require", "exports", "./async", "./guid"], function(require, exports, __async__, __g__) {
     var async = __async__;
 
-    var utils = __utils__;
+    var g = __g__;
 
     var FSTreeNode = (function () {
         function FSTreeNode(file, $parent, db, environment, tree, indentLevel) {
@@ -11,7 +11,7 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
             this._$parent = $parent;
             this._tree = tree;
             this._indent = indentLevel || 0;
-            this.id = utils.Guid.make();
+            this.id = g.Guid.generate().value;
             this.isOpen = false;
         }
         FSTreeNode._EFFECT_DURATION = 100;
@@ -102,7 +102,7 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
 
             this._file.forEachChild(function (child) {
                 asyncOps[i++] = (function (cb) {
-                    return _this._db.read(_this._db.utils.getAbsolutePath({
+                    return _this._db.getFileInfo(_this._db.utils.getAbsolutePath({
                         name: child.name,
                         location: _this._file.absolutePath
                     }), cb);
@@ -199,7 +199,7 @@ define(["require", "exports", "./async", "./utils"], function(require, exports, 
         FSTreeView.prototype._openRoot = function () {
             var _this = this;
             async.newTask(function (cb) {
-                return _this._db.read(_this._path, cb);
+                return _this._db.getFileInfo(_this._path, cb);
             }).done(function (response) {
                 if(!response.success) {
                     _this._env.log("Failed to open FS root (tree-view.ts:FSTreeView:constructor)");

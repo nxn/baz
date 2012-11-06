@@ -384,6 +384,14 @@
     <Content Include="fonts\Amaranth-webfont.ttf" />
     <Content Include="fonts\Amaranth-webfont.woff" />
     <Content Include="fonts\iconic_fill.svg" />
+    <TypeScriptCompile Include="guid.d.ts" />
+    <Content Include="guid.d.js">
+      <DependentUpon>guid.d.ts</DependentUpon>
+    </Content>
+    <TypeScriptCompile Include="guid.ts" />
+    <Content Include="guid.js">
+      <DependentUpon>guid.ts</DependentUpon>
+    </Content>
     <Content Include="handlebars-1.0.rc.1.js" />
     <Content Include="img\closed.png" />
     <Content Include="img\iconSweets1\16\dark\16-Address-Book.png" />
@@ -3657,14 +3665,6 @@
       <DependentUpon>tree-view.ts</DependentUpon>
     </Content>
     <TypeScriptCompile Include="tree-view.ts" />
-    <TypeScriptCompile Include="utils.ts" />
-    <TypeScriptCompile Include="utils.d.ts" />
-    <Content Include="utils.d.js">
-      <DependentUpon>utils.d.ts</DependentUpon>
-    </Content>
-    <Content Include="utils.js">
-      <DependentUpon>utils.ts</DependentUpon>
-    </Content>
     <Content Include="web.config" />
     <Content Include="fonts\iconic_fill.woff" />
     <Content Include="fonts\iconic_fill.ttf" />
@@ -3846,7 +3846,13 @@
       <DependentUpon>web.config</DependentUpon>
     </None>
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Web" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <Import Project="$(VSToolsPath)\WebApplications\Microsoft.WebApplication.targets" Condition="'$(VSToolsPath)' != ''" />
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v10.0\WebApplications\Microsoft.WebApplication.targets" Condition="false" />

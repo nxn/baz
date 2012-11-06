@@ -101,17 +101,17 @@ var env = {
 }
 
 async.newTask(cb => cb(fs.open({ name: 'baz', environment: env })))
-    .next((fs : IFileDb) => cb => fs.save(bazSolution,       () => cb(fs)))
-    .next((fs : IFileDb) => cb => fs.save(bazProject,        () => cb(fs)))
-    .next((fs : IFileDb) => cb => fs.save(bazTS,             () => cb(fs)))
-    .next((fs : IFileDb) => cb => fs.save(bazJS,             () => cb(fs)))
-    .next((fs : IFileDb) => cb => fs.save(bazCSS,            () => cb(fs)))
-    .next((fs : IFileDb) => cb => fs.save(aceDir,            () => cb(fs)))
-    .next((fs : IFileDb) => cb => fs.save(aceJS,             () => cb(fs)))
-    .next((fs : IFileDb) => cb => fs.save(aceLong,           () => cb(fs)))
-    .next((fs : IFileDb) => cb => fs.save(compilerProject,   () => cb(fs)))
-    .next((fs : IFileDb) => cb => fs.save(tscTS,             () => cb(fs)))
-    .next((fs : IFileDb) => cb => fs.save(libTS,             () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.putFileInfo(bazSolution,       () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.putFileInfo(bazProject,        () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.putFileInfo(bazTS,             () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.putFileInfo(bazJS,             () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.putFileInfo(bazCSS,            () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.putFileInfo(aceDir,            () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.putFileInfo(aceJS,             () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.putFileInfo(aceLong,           () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.putFileInfo(compilerProject,   () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.putFileInfo(tscTS,             () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.putFileInfo(libTS,             () => cb(fs)))
     .done((fs : IFileDb) => {
         (<any> window).tree = new ui.FSTreeView({
             db          : fs,

@@ -1,3 +1,5 @@
+/// <reference path="guid.ts" />
+
 interface IPathInfo {
     name        : string;
     location    : string;
@@ -13,7 +15,10 @@ interface IChildInfoDictionary {
     [filename : string] : IChildInfo;
 }
 
-interface IFileInfo extends IChildInfo {
+interface IFileInfo {
+    name            : string;
+    type            : string;
+    contentId       : IGuid;
     location        : string;
     absolutePath    : string;
     children        : IChildInfoDictionary;
@@ -48,9 +53,12 @@ interface IFileDb {
     version             : number;
     utils               : IFileUtils;
 
-    read(absolutePath : string, cb : (IResponse) => any);
-    save(file : IFileInfoData, cb? : (IResponse) => any);
-    remove(absolutePath : string, cb? : (IResponse) => any);
-    copy(source : string, destination : string, cb? : (IResponse) => any);
-    move(source : string, destination : string, cb? : (IResponse) => any);   
+    getFileInfo(absolutePath : string, cb : (IResponse) => any);
+    getFileContent(contentId : IGuid, cb : (IResponse) => any);
+    getFileContent(absolutePath : string, cb : (IResponse) => any);
+    putFileInfo(data : IFileInfoData, cb? : (IResponse) => any);
+    putFileContent(data : any, cb? : (IResponse) => any);
+    rm(absolutePath : string, cb? : (IResponse) => any);
+    cp(source : string, destination : string, cb? : (IResponse) => any);
+    mv(source : string, destination : string, cb? : (IResponse) => any);   
 }

@@ -2,7 +2,7 @@
 /// <reference path="jquery.d.ts" />
 
 import async = module("./async");
-import utils = module("./utils");
+import g = module("./guid");
 
 class FSTreeNode implements IFSTreeNode {
     id                  : string;
@@ -42,7 +42,7 @@ class FSTreeNode implements IFSTreeNode {
         this._$parent   = $parent;
         this._tree      = tree;
         this._indent    = indentLevel || 0;
-        this.id         = utils.Guid.make();
+        this.id         = g.Guid.generate().value;
         this.isOpen     = false;
     }
 
@@ -131,7 +131,7 @@ class FSTreeNode implements IFSTreeNode {
 
         this._file.forEachChild((child : IChildInfo) => {
             asyncOps[i++] = (cb =>
-                this._db.read(
+                this._db.getFileInfo(
                     this._db.utils.getAbsolutePath({
                         name    : child.name,
                         location: this._file.absolutePath
@@ -264,7 +264,7 @@ export class FSTreeView implements IFSTreeView {
 
     private _openRoot() {
         async
-            .newTask(cb => this._db.read(this._path, cb))
+            .newTask(cb => this._db.getFileInfo(this._path, cb))
             .done((response : IResponse) => {
                 if (!response.success) {
                     this._env.log(

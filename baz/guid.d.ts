@@ -1,0 +1,3 @@
+interface IGuid {
+    value : string;
+}
