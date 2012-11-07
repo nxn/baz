@@ -2,7 +2,7 @@ import fs = module('./filedb');
 import async = module('./async');
 import ui = module('./tree-view');
 
-var bazSolution : IFileInfoData = {
+var bazSolution : IFileNodeData = {
     name: 'baz.sln',
     type: 'application/vnd.baz.solution',
     location: '/',
@@ -10,7 +10,7 @@ var bazSolution : IFileInfoData = {
     children: null
 }
 
-var bazProject : IFileInfoData = {
+var bazProject : IFileNodeData = {
     name: 'baz.tsp',
     type: 'application/vnd.baz.project',
     location : '/baz.sln',
@@ -18,7 +18,7 @@ var bazProject : IFileInfoData = {
     children: null
 }
 
-var bazTS : IFileInfoData = {
+var bazTS : IFileNodeData = {
     name: 'baz.ts',
     type: 'text/vnd.ms-typescript',
     location: '/baz.sln/baz.tsp',
@@ -26,7 +26,7 @@ var bazTS : IFileInfoData = {
     children: null
 }
 
-var bazJS : IFileInfoData = {
+var bazJS : IFileNodeData = {
     name: 'baz.js',
     type: 'text/javascript',
     location: '/baz.sln/baz.tsp/baz.ts',
@@ -34,7 +34,7 @@ var bazJS : IFileInfoData = {
     children: null
 }
 
-var bazCSS : IFileInfoData = {
+var bazCSS : IFileNodeData = {
     name: 'baz.css',
     type: 'text/css',
     location: '/baz.sln/baz.tsp',
@@ -42,7 +42,7 @@ var bazCSS : IFileInfoData = {
     children: null
 }
 
-var aceDir : IFileInfoData = {
+var aceDir : IFileNodeData = {
     name: 'ace',
     type: 'application/vnd.baz.directory',
     location: '/baz.sln/baz.tsp',
@@ -50,14 +50,14 @@ var aceDir : IFileInfoData = {
     children: null
 }
 
-var aceJS : IFileInfoData = {
+var aceJS : IFileNodeData = {
     name: 'ace.js',
     type: 'text/javascript',
     location: '/baz.sln/baz.tsp/ace',
     content: null,
     children: null
 }
-var aceLong : IFileInfoData = {
+var aceLong : IFileNodeData = {
     name: 'long ass filename right here homie.js',
     type: 'text/javascript',
     location: '/baz.sln/baz.tsp/ace',
@@ -65,7 +65,7 @@ var aceLong : IFileInfoData = {
     children: null
 }
 
-var compilerProject : IFileInfoData = {
+var compilerProject : IFileNodeData = {
     name: 'typescript-compiler.tsp',
     type: 'application/vnd.baz.project',
     location: '/baz.sln',
@@ -73,7 +73,7 @@ var compilerProject : IFileInfoData = {
     children: null
 }
 
-var tscTS : IFileInfoData = {
+var tscTS : IFileNodeData = {
     name: 'tsc.ts',
     type: 'text/vnd.ms-typescript',
     location: '/baz.sln/typescript-compiler.tsp',
@@ -82,7 +82,7 @@ var tscTS : IFileInfoData = {
 }
 
 
-var libTS : IFileInfoData = {
+var libTS : IFileNodeData = {
     name: 'lib.d.ts',
     type: 'text/vnd.ms-typescript',
     location: '/baz.sln/typescript-compiler.tsp',
@@ -101,17 +101,17 @@ var env = {
 }
 
 async.newTask(cb => cb(fs.open({ name: 'baz', environment: env })))
-    .next((fs : IFileDb) => cb => fs.putFileInfo(bazSolution,       () => cb(fs)))
-    .next((fs : IFileDb) => cb => fs.putFileInfo(bazProject,        () => cb(fs)))
-    .next((fs : IFileDb) => cb => fs.putFileInfo(bazTS,             () => cb(fs)))
-    .next((fs : IFileDb) => cb => fs.putFileInfo(bazJS,             () => cb(fs)))
-    .next((fs : IFileDb) => cb => fs.putFileInfo(bazCSS,            () => cb(fs)))
-    .next((fs : IFileDb) => cb => fs.putFileInfo(aceDir,            () => cb(fs)))
-    .next((fs : IFileDb) => cb => fs.putFileInfo(aceJS,             () => cb(fs)))
-    .next((fs : IFileDb) => cb => fs.putFileInfo(aceLong,           () => cb(fs)))
-    .next((fs : IFileDb) => cb => fs.putFileInfo(compilerProject,   () => cb(fs)))
-    .next((fs : IFileDb) => cb => fs.putFileInfo(tscTS,             () => cb(fs)))
-    .next((fs : IFileDb) => cb => fs.putFileInfo(libTS,             () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.putFileNode(bazSolution,       () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.putFileNode(bazProject,        () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.putFileNode(bazTS,             () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.putFileNode(bazJS,             () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.putFileNode(bazCSS,            () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.putFileNode(aceDir,            () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.putFileNode(aceJS,             () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.putFileNode(aceLong,           () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.putFileNode(compilerProject,   () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.putFileNode(tscTS,             () => cb(fs)))
+    .next((fs : IFileDb) => cb => fs.putFileNode(libTS,             () => cb(fs)))
     .done((fs : IFileDb) => {
         (<any> window).tree = new ui.FSTreeView({
             db          : fs,

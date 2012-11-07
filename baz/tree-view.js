@@ -102,7 +102,7 @@ define(["require", "exports", "./async", "./guid"], function(require, exports, _
 
             this._file.forEachChild(function (child) {
                 asyncOps[i++] = (function (cb) {
-                    return _this._db.getFileInfo(_this._db.utils.getAbsolutePath({
+                    return _this._db.getFileNode(_this._db.utils.getAbsolutePath({
                         name: child.name,
                         location: _this._file.absolutePath
                     }), cb);
@@ -199,7 +199,7 @@ define(["require", "exports", "./async", "./guid"], function(require, exports, _
         FSTreeView.prototype._openRoot = function () {
             var _this = this;
             async.newTask(function (cb) {
-                return _this._db.getFileInfo(_this._path, cb);
+                return _this._db.getFileNode(_this._path, cb);
             }).done(function (response) {
                 if(!response.success) {
                     _this._env.log("Failed to open FS root (tree-view.ts:FSTreeView:constructor)");

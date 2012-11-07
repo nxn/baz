@@ -102,67 +102,67 @@ define(["require", "exports", './filedb', './async', './tree-view'], function(re
         }));
     }).next(function (fs) {
         return function (cb) {
-            return fs.putFileInfo(bazSolution, function () {
+            return fs.putFileNode(bazSolution, function () {
                 return cb(fs);
             });
         }
     }).next(function (fs) {
         return function (cb) {
-            return fs.putFileInfo(bazProject, function () {
+            return fs.putFileNode(bazProject, function () {
                 return cb(fs);
             });
         }
     }).next(function (fs) {
         return function (cb) {
-            return fs.putFileInfo(bazTS, function () {
+            return fs.putFileNode(bazTS, function () {
                 return cb(fs);
             });
         }
     }).next(function (fs) {
         return function (cb) {
-            return fs.putFileInfo(bazJS, function () {
+            return fs.putFileNode(bazJS, function () {
                 return cb(fs);
             });
         }
     }).next(function (fs) {
         return function (cb) {
-            return fs.putFileInfo(bazCSS, function () {
+            return fs.putFileNode(bazCSS, function () {
                 return cb(fs);
             });
         }
     }).next(function (fs) {
         return function (cb) {
-            return fs.putFileInfo(aceDir, function () {
+            return fs.putFileNode(aceDir, function () {
                 return cb(fs);
             });
         }
     }).next(function (fs) {
         return function (cb) {
-            return fs.putFileInfo(aceJS, function () {
+            return fs.putFileNode(aceJS, function () {
                 return cb(fs);
             });
         }
     }).next(function (fs) {
         return function (cb) {
-            return fs.putFileInfo(aceLong, function () {
+            return fs.putFileNode(aceLong, function () {
                 return cb(fs);
             });
         }
     }).next(function (fs) {
         return function (cb) {
-            return fs.putFileInfo(compilerProject, function () {
+            return fs.putFileNode(compilerProject, function () {
                 return cb(fs);
             });
         }
     }).next(function (fs) {
         return function (cb) {
-            return fs.putFileInfo(tscTS, function () {
+            return fs.putFileNode(tscTS, function () {
                 return cb(fs);
             });
         }
     }).next(function (fs) {
         return function (cb) {
-            return fs.putFileInfo(libTS, function () {
+            return fs.putFileNode(libTS, function () {
                 return cb(fs);
             });
         }

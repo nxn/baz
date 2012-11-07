@@ -11,7 +11,7 @@ class FSTreeNode implements IFSTreeNode {
 
     private _db         : IFileDb;
     private _env        : IEnvironment;
-    private _file       : IFileInfo;
+    private _file       : IFileNode;
     private _$this      : JQuery;
     private _$parent    : JQuery;
     private _tree       : FSTreeView;
@@ -29,7 +29,7 @@ class FSTreeNode implements IFSTreeNode {
         })();
 
     constructor(
-        file            : IFileInfo,
+        file            : IFileNode,
         $parent         : JQuery,
         db              : IFileDb, 
         environment     : IEnvironment,
@@ -129,9 +129,9 @@ class FSTreeNode implements IFSTreeNode {
 
         var i = 0, asyncOps = new Array(this._file.childCount);
 
-        this._file.forEachChild((child : IChildInfo) => {
+        this._file.forEachChild((child : IChildNode) => {
             asyncOps[i++] = (cb =>
-                this._db.getFileInfo(
+                this._db.getFileNode(
                     this._db.utils.getAbsolutePath({
                         name    : child.name,
                         location: this._file.absolutePath
@@ -264,7 +264,7 @@ export class FSTreeView implements IFSTreeView {
 
     private _openRoot() {
         async
-            .newTask(cb => this._db.getFileInfo(this._path, cb))
+            .newTask(cb => this._db.getFileNode(this._path, cb))
             .done((response : IResponse) => {
                 if (!response.success) {
                     this._env.log(

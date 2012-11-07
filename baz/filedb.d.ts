@@ -5,34 +5,33 @@ interface IPathInfo {
     location    : string;
 }
 
-interface IChildInfo {
+interface IChildNode {
     name        : string;
     type        : string;
-    contentId   : string;
 }
 
-interface IChildInfoDictionary {
-    [filename : string] : IChildInfo;
+interface IChildNodeDictionary {
+    [filename : string] : IChildNode;
 }
 
-interface IFileInfo {
+interface IFileNode {
     name            : string;
     type            : string;
     contentId       : IGuid;
     location        : string;
     absolutePath    : string;
-    children        : IChildInfoDictionary;
+    children        : IChildNodeDictionary;
     size            : number;
     childCount      : number;
-    forEachChild(fn : (child : IChildInfo) => any) : void;
+    forEachChild(fn : (child : IChildNode) => any) : void;
 }
 
-interface IFileInfoData {
+interface IFileNodeData {
     name            : string;
     type            : string;
     location        : string;
     contentId?      : string;
-    children?       : IChildInfoDictionary;
+    children?       : IChildNodeDictionary;
 }
 
 interface IFileDbConfig {
@@ -53,12 +52,13 @@ interface IFileDb {
     version             : number;
     utils               : IFileUtils;
 
-    getFileInfo(absolutePath : string, cb : (IResponse) => any);
-    getFileContent(contentId : IGuid, cb : (IResponse) => any);
-    getFileContent(absolutePath : string, cb : (IResponse) => any);
-    putFileInfo(data : IFileInfoData, cb? : (IResponse) => any);
-    putFileContent(data : any, cb? : (IResponse) => any);
-    rm(absolutePath : string, cb? : (IResponse) => any);
-    cp(source : string, destination : string, cb? : (IResponse) => any);
-    mv(source : string, destination : string, cb? : (IResponse) => any);   
+    getFileNode(absolutePath : string, cb : (IResponse) => any) : void;
+    putFileNode(data : IFileNodeData, cb? : (IResponse) => any) : void;
+    getFileContent(contentId : IGuid, cb : (IResponse) => any) : void;
+    getFileContent(absolutePath : string, cb : (IResponse) => any) : void;
+    putFileContent(contentId : IGuid, data : any, cb? : (IResponse) => any) : void;
+    putFileContent(absolutePath : string, data : any, cb? : (IResponse) => any) : void;
+    rm(absolutePath : string, cb? : (IResponse) => any) : void;
+    cp(source : string, destination : string, cb? : (IResponse) => any) : void;
+    mv(source : string, destination : string, cb? : (IResponse) => any) : void;   
 }
