@@ -36,8 +36,8 @@ class FileNode implements IFileNode {
 
     addChild(child : IChildNode) {
         this.children[child.name] = {
-            name        : child.name, 
-            type        : child.type
+            name : child.name, 
+            type : child.type
         };
     }
 
