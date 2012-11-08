@@ -30,7 +30,7 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
                 fn(child);
             }
         };
-        FileNode.prototype.getFileNodeData = function () {
+        FileNode.prototype.cloneFileNodeData = function () {
             return {
                 name: this.name,
                 location: this.location,
@@ -40,11 +40,22 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
                 contentId: this.contentId.value
             };
         };
-        FileNode.prototype.getChildNodeData = function () {
+        FileNode.prototype.cloneChildNodeData = function () {
             return {
                 name: this.name,
                 type: this.type
             };
+        };
+        FileNode.prototype.cloneChildren = function () {
+            var clone = {
+            };
+            this.forEachChild(function (child) {
+                clone[child.name] = {
+                    name: child.name,
+                    type: child.type
+                };
+            });
+            return clone;
         };
         Object.defineProperty(FileNode.prototype, "name", {
             get: function () {
@@ -214,7 +225,7 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
                 children: null,
                 contentId: null
             });
-            fileNodeStore.put(rootNode.getFileNodeData(), rootNode.absolutePath).onerror = function (ev) {
+            fileNodeStore.put(rootNode.cloneFileNodeData(), rootNode.absolutePath).onerror = function (ev) {
                 _this._env.log('\tFAILURE: Could not create ROOT in database "%s".', _this.name);
             };
         };
@@ -268,9 +279,9 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
                 };
             }).next(function (parentNodeData) {
                 var parentNode = new FileNode(parentNodeData);
-                parentNode.addChild(file.getChildNodeData());
+                parentNode.addChild(file.cloneChildNodeData());
                 return function (cb) {
-                    return transaction.objectStore(FileDb._FILE_NODE_STORE).put(parentNode.getFileNodeData(), parentNode.absolutePath).onsuccess = cb;
+                    return transaction.objectStore(FileDb._FILE_NODE_STORE).put(parentNode.cloneFileNodeData(), parentNode.absolutePath).onsuccess = cb;
                 }
             }).done(function () {
                 return _this._env.log('\tSUCCESS: Added reference "%s" to parent "%s".', file.name, file.location);
@@ -292,7 +303,7 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
                 var parentNode = new FileNode(parentNodeData);
                 parentNode.removeChild(pathInfo.name);
                 return function (cb) {
-                    return transaction.objectStore(FileDb._FILE_NODE_STORE).put(parentNode.getFileNodeData(), parentNode.absolutePath).onsuccess = cb;
+                    return transaction.objectStore(FileDb._FILE_NODE_STORE).put(parentNode.cloneFileNodeData(), parentNode.absolutePath).onsuccess = cb;
                 }
             }).done(function () {
                 return _this._env.log('\tSUCCESS: Removed reference "%s" from parent "%s".', pathInfo.name, pathInfo.location);
@@ -313,7 +324,7 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
             });
             action(root);
         };
-        FileDb.prototype._cpFileBranch = function (source, destination, transaction, detachContent) {
+        FileDb.prototype._cpFileNodeBranch = function (source, destination, transaction, detachContent) {
             if (typeof detachContent === "undefined") { detachContent = false; }
             var _this = this;
             return function (cb) {
@@ -325,25 +336,24 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
                     }
                     var root = new FileNode(fileNodeData);
                     _this._traverseWithAction(transaction, root, function (fileNode) {
+                        var newNode = null;
+                        var newNodeData = null;
                         var isRoot = fileNode.absolutePath === root.absolutePath;
-                        var oldFilePath = fileNode.absolutePath;
-                        var newPathInfo = null;
+                        var newPathInfo = isRoot ? FileUtils.getPathInfo(destination) : FileUtils.getPathInfo(fileNode.absolutePath.replace(source, destination));
 
+                        newNodeData = {
+                            name: newPathInfo.name,
+                            location: newPathInfo.location,
+                            type: fileNode.type,
+                            contentId: detachContent ? null : fileNode.contentId.value,
+                            children: fileNode.cloneChildren()
+                        };
+                        var newNode = new FileNode(newNodeData);
                         if(isRoot) {
-                            newPathInfo = FileUtils.getPathInfo(destination);
-                        } else {
-                            newPathInfo = FileUtils.getPathInfo(oldFilePath.replace(source, destination));
+                            _this._addChildReferenceFor(newNode, transaction);
                         }
-                        fileNode.name = newPathInfo.name;
-                        fileNode.location = newPathInfo.location;
-                        if(detachContent) {
-                            fileNode.contentId = g.Guid.generate();
-                        }
-                        if(isRoot) {
-                            _this._addChildReferenceFor(fileNode, transaction);
-                        }
-                        transaction.objectStore(FileDb._FILE_NODE_STORE).add(fileNode.getFileNodeData(), fileNode.absolutePath).onsuccess = function (ev) {
-                            return cb(oldFilePath, fileNode.absolutePath, transaction);
+                        transaction.objectStore(FileDb._FILE_NODE_STORE).add(newNode.cloneFileNodeData(), newNode.absolutePath).onsuccess = function (ev) {
+                            return cb(fileNode, newNode, transaction);
                         };
                     });
                 };
@@ -513,7 +523,7 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
             this._getTransaction(transactionConfig, cb).next(function (transaction) {
                 _this._addChildReferenceFor(fileNode, transaction);
                 return function (cb) {
-                    return transaction.objectStore(FileDb._FILE_NODE_STORE).put(fileNode.getFileNodeData(), fileNode.absolutePath).onsuccess = cb;
+                    return transaction.objectStore(FileDb._FILE_NODE_STORE).put(fileNode.cloneFileNodeData(), fileNode.absolutePath).onsuccess = cb;
                 }
             }).done(function () {
                 return _this._env.log('\tSUCCESS: Saved "%s" to database "%s".', fileNode.absolutePath, _this.name);
@@ -601,6 +611,10 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
             destination = FileUtils.normalizePath(destination);
             var transactionConfig = {
                 mode: FileDb._READ_WRITE,
+                stores: [
+                    FileDb._FILE_NODE_STORE, 
+                    FileDb._FILE_CONTENT_STORE
+                ],
                 initMsg: [
                     'INFO: Starting transaction to copy "', 
                     source, 
@@ -639,9 +653,21 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
                 ].join('')
             };
             this._getTransaction(transactionConfig, cb).next(function (transaction) {
-                return _this._cpFileBranch(source, destination, transaction, true);
-            }).done(function (source, destination, transaction) {
-                return _this._env.log('\tSUCCESS: Copied "%s" to "%s".', source, destination);
+                return _this._cpFileNodeBranch(source, destination, transaction, true);
+            }).next(function (sourceNode, destinationNode, transaction) {
+                return function (cb) {
+                    return transaction.objectStore(FileDb._FILE_CONTENT_STORE).get(sourceNode.contentId.value).onsuccess = function (ev) {
+                        return cb(sourceNode, destinationNode, (ev.target).result, transaction);
+                    };
+                }
+            }).next(function (sourceNode, destinationNode, content, transaction) {
+                return function (cb) {
+                    return transaction.objectStore(FileDb._FILE_CONTENT_STORE).add(content, destinationNode.contentId.value).onsuccess = function (ev) {
+                        return cb(sourceNode, destinationNode);
+                    };
+                }
+            }).done(function (sourceNode, destinationNode) {
+                return _this._env.log('\tSUCCESS: Copied "%s" to "%s".', sourceNode.absolutePath, destinationNode.absolutePath);
             });
         };
         FileDb.prototype.mv = function (source, destination, cb) {
@@ -692,15 +718,15 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
             };
             this._getTransaction(transactionConfig, cb).next(function (transaction) {
                 _this._removeChildReferenceFor(source, transaction);
-                return _this._cpFileBranch(source, destination, transaction);
-            }).next(function (source, destination, transaction) {
+                return _this._cpFileNodeBranch(source, destination, transaction);
+            }).next(function (sourceNode, destinationNode, transaction) {
                 return function (cb) {
-                    return transaction.objectStore(FileDb._FILE_NODE_STORE).delete(source).onsuccess = function (ev) {
-                        return cb(source, destination);
+                    return transaction.objectStore(FileDb._FILE_NODE_STORE).delete(sourceNode.absolutePath).onsuccess = function (ev) {
+                        return cb(sourceNode, destinationNode);
                     };
                 }
-            }).done(function (source, destination) {
-                return _this._env.log('\tSUCCESS: Moved "%s" to "%s".', source, destination);
+            }).done(function (sourceNode, destinationNode) {
+                return _this._env.log('\tSUCCESS: Moved "%s" to "%s".', sourceNode.absolutePath, destinationNode.absolutePath);
             });
         };
         return FileDb;

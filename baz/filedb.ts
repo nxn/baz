@@ -53,7 +53,7 @@ class FileNode implements IFileNode {
         }
     }
 
-    getFileNodeData() : IFileNodeData {
+    cloneFileNodeData() : IFileNodeData {
         return {
             name            : this.name,
             location        : this.location,
@@ -64,11 +64,24 @@ class FileNode implements IFileNode {
         };
     }
 
-    getChildNodeData() : IChildNode {
+    cloneChildNodeData() : IChildNode {
         return {
             name        : this.name,
             type        : this.type
         }
+    }
+
+    cloneChildren() : IChildNodeDictionary {
+        var clone : IChildNodeDictionary = { };
+
+        this.forEachChild((child : IChildNode) => {
+            clone[child.name] = {
+                name : child.name,
+                type : child.type
+            }
+        });
+
+        return clone;
     }
 
     get name() {
@@ -252,7 +265,7 @@ class FileDb implements IFileDb {
         });
 
         fileNodeStore
-            .put(rootNode.getFileNodeData(), rootNode.absolutePath)
+            .put(rootNode.cloneFileNodeData(), rootNode.absolutePath)
             .onerror = (ev) => {
                 this._env.log('\tFAILURE: Could not create ROOT in database "%s".', this.name)
             };
@@ -304,11 +317,11 @@ class FileDb implements IFileDb {
             }
         ).next((parentNodeData : IFileNodeData) => {
             var parentNode = new FileNode(parentNodeData);
-            parentNode.addChild(file.getChildNodeData());
+            parentNode.addChild(file.cloneChildNodeData());
 
             return cb => transaction
                 .objectStore(FileDb._FILE_NODE_STORE)
-                .put(parentNode.getFileNodeData(), parentNode.absolutePath)
+                .put(parentNode.cloneFileNodeData(), parentNode.absolutePath)
                 .onsuccess = cb;
         }).done(() =>
             this._env.log(
@@ -340,7 +353,7 @@ class FileDb implements IFileDb {
 
             return cb => transaction
                 .objectStore(FileDb._FILE_NODE_STORE)
-                .put(parentNode.getFileNodeData(), parentNode.absolutePath)
+                .put(parentNode.cloneFileNodeData(), parentNode.absolutePath)
                 .onsuccess = cb;
             }
         ).done(() =>
@@ -377,7 +390,7 @@ class FileDb implements IFileDb {
         action(root);
     }
 
-    private _cpFileBranch(
+    private _cpFileNodeBranch(
         source          : string, 
         destination     : string, 
         transaction     : IDBTransaction,
@@ -397,32 +410,31 @@ class FileDb implements IFileDb {
                 var root = new FileNode(fileNodeData);
 
                 this._traverseWithAction(transaction, root, (fileNode : FileNode) => {
-                    var isRoot = fileNode.absolutePath === root.absolutePath
-                        , oldFilePath = fileNode.absolutePath
-                        , newPathInfo = null;
+                    var newNode     : FileNode     = null,
+                        newNodeData : IFileNodeData = null,
+                        isRoot      = fileNode.absolutePath === root.absolutePath,
+                        newPathInfo = isRoot 
+                                    ? FileUtils.getPathInfo(destination)
+                                    : FileUtils.getPathInfo(fileNode.absolutePath.replace(source, destination));
+
+                    newNodeData = {
+                        name        : newPathInfo.name,
+                        location    : newPathInfo.location,
+                        type        : fileNode.type,
+                        contentId   : detachContent ? null : fileNode.contentId.value,
+                        children    : fileNode.cloneChildren()
+                    }
+
+                    var newNode = new FileNode(newNodeData);
 
                     if (isRoot) {
-                        newPathInfo = FileUtils.getPathInfo(destination);
-                    }
-                    else {
-                        newPathInfo = FileUtils.getPathInfo(oldFilePath.replace(source, destination));
-                    }
-
-                    fileNode.name      = newPathInfo.name;
-                    fileNode.location  = newPathInfo.location;
-
-                    if (detachContent) {
-                        fileNode.contentId = g.Guid.generate()
-                    }
-
-                    if (isRoot) {
-                        this._addChildReferenceFor(fileNode, transaction);
+                        this._addChildReferenceFor(newNode, transaction);
                     }
 
                     transaction
                         .objectStore(FileDb._FILE_NODE_STORE)
-                        .add(fileNode.getFileNodeData(), fileNode.absolutePath) // use add to prevent overwriting a node
-                        .onsuccess = ev => cb(oldFilePath, fileNode.absolutePath, transaction)
+                        .add(newNode.cloneFileNodeData(), newNode.absolutePath) // use add to prevent overwriting a node
+                        .onsuccess = ev => cb(fileNode, newNode, transaction)
             });
         }
     }
@@ -541,7 +553,7 @@ class FileDb implements IFileDb {
                 return cb =>
                     transaction
                         .objectStore(FileDb._FILE_NODE_STORE)
-                        .put(fileNode.getFileNodeData(), fileNode.absolutePath)
+                        .put(fileNode.cloneFileNodeData(), fileNode.absolutePath)
                         .onsuccess = cb
             })
             .done(() => 
@@ -622,6 +634,7 @@ class FileDb implements IFileDb {
 
         var transactionConfig : ITransactionConfig = {
             mode        : FileDb._READ_WRITE,
+            stores      : [ FileDb._FILE_NODE_STORE, FileDb._FILE_CONTENT_STORE ],
             initMsg     : ['INFO: Starting transaction to copy "', source, '" to "', destination, '" in database "', this.name, '"...'].join(''),
             successMsg  : ['\tSUCCESS: Transaction for copying "', source, '" to "', destination, '" in database "', this.name, '" completed.'].join(''),
             errorMsg    : ['\tFAILURE: Could not copy "', source, '" to "', destination, '" in database "', this.name, '".'].join(''),
@@ -629,9 +642,21 @@ class FileDb implements IFileDb {
         };
 
         this._getTransaction(transactionConfig, cb)
-            .next((transaction : IDBTransaction) => this._cpFileBranch(source, destination, transaction, true))
-            .done((source : string, destination : string, transaction : IDBTransaction) =>
-                this._env.log('\tSUCCESS: Copied "%s" to "%s".', source, destination)
+            .next((transaction : IDBTransaction) => this._cpFileNodeBranch(source, destination, transaction, true))
+            .next((sourceNode : FileNode, destinationNode : FileNode, transaction : IDBTransaction) =>
+                cb => transaction
+                    .objectStore(FileDb._FILE_CONTENT_STORE)
+                    .get(sourceNode.contentId.value)
+                    .onsuccess = ev => cb(sourceNode, destinationNode, (<any> ev.target).result, transaction)
+            )
+            .next((sourceNode : FileNode, destinationNode : FileNode, content : any, transaction : IDBTransaction) =>
+                cb => transaction
+                    .objectStore(FileDb._FILE_CONTENT_STORE)
+                    .add(content, destinationNode.contentId.value)
+                    .onsuccess = ev => cb(sourceNode, destinationNode)
+            )
+            .done((sourceNode : FileNode, destinationNode : FileNode) =>
+                this._env.log('\tSUCCESS: Copied "%s" to "%s".', sourceNode.absolutePath, destinationNode.absolutePath)
             );
     }
 
@@ -654,16 +679,16 @@ class FileDb implements IFileDb {
         this._getTransaction(transactionConfig, cb)
             .next((transaction : IDBTransaction) => {
                 this._removeChildReferenceFor(source, transaction);
-                return this._cpFileBranch(source, destination, transaction)
+                return this._cpFileNodeBranch(source, destination, transaction)
             })
-            .next((source : string, destination : string, transaction : IDBTransaction) => cb =>
+            .next((sourceNode : FileNode, destinationNode : FileNode, transaction : IDBTransaction) => cb =>
                 transaction
                     .objectStore(FileDb._FILE_NODE_STORE)
-                    .delete(source)
-                    .onsuccess = ev => cb(source, destination)
+                    .delete(sourceNode.absolutePath)
+                    .onsuccess = ev => cb(sourceNode, destinationNode)
             )
-            .done((source : string, destination : string) =>
-                this._env.log('\tSUCCESS: Moved "%s" to "%s".', source, destination)
+            .done((sourceNode : FileNode, destinationNode : FileNode) =>
+                this._env.log('\tSUCCESS: Moved "%s" to "%s".', sourceNode.absolutePath, destinationNode.absolutePath)
             );
     }
 }
