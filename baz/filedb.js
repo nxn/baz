@@ -483,6 +483,83 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
                 }
             });
         };
+        FileDb.prototype.putFileContent = function (identifier, data, cb) {
+            var _this = this;
+            if(!cb) {
+                cb = FileDb._NOOP;
+            }
+            var task;
+            var transactionConfig = {
+                mode: FileDb._READ_ONLY,
+                initMsg: [
+                    'INFO: Starting transaction to save file contents of "', 
+                    identifier, 
+                    '" to database "', 
+                    this.name, 
+                    '"...'
+                ].join(''),
+                successMsg: [
+                    '\tSUCCESS: Transaction for saving file contents of "', 
+                    identifier, 
+                    '" to database "', 
+                    this.name, 
+                    '" completed.'
+                ].join(''),
+                abortMsg: [
+                    '\tFAILURE: Transaction aborted while saving file contents of "', 
+                    identifier, 
+                    '" to database "', 
+                    this.name, 
+                    '".'
+                ].join(''),
+                errorMsg: [
+                    '\tFAILURE: Could not save "', 
+                    identifier, 
+                    '" to database "', 
+                    this.name, 
+                    '".'
+                ].join('')
+            };
+
+            if(typeof identifier === 'string') {
+                transactionConfig.stores = [
+                    FileDb._FILE_NODE_STORE, 
+                    FileDb._FILE_CONTENT_STORE
+                ];
+                identifier = FileUtils.normalizePath(identifier);
+                task = this._getTransaction(transactionConfig, cb).next(function (transaction) {
+                    return _this._resolveContentId(identifier, transaction);
+                });
+            } else {
+                if(identifier instanceof g.Guid) {
+                    transactionConfig.stores = [
+                        FileDb._FILE_CONTENT_STORE
+                    ];
+                    task = this._getTransaction(transactionConfig, cb).next(function (transaction) {
+                        return function (cb) {
+                            return cb((identifier).value, transaction);
+                        }
+                    });
+                } else {
+                    cb({
+                        success: false,
+                        error: [
+                            'Cannot not resolve file content with identifier "', 
+                            identifier, 
+                            '".'
+                        ].join('')
+                    });
+                    return;
+                }
+            }
+            task.done(function (contentId, transaction) {
+                if(contentId) {
+                    transaction.objectStore(FileDb._FILE_CONTENT_STORE).put(contentId);
+                } else {
+                    _this._env.log('\tWARNING: Cannot resolve file content with identifier "%s" (contentId: "%s").', identifier, contentId);
+                }
+            });
+        };
         FileDb.prototype.putFileNode = function (fileNodeData, cb) {
             var _this = this;
             if(!cb) {
@@ -528,8 +605,6 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
             }).done(function () {
                 return _this._env.log('\tSUCCESS: Saved "%s" to database "%s".', fileNode.absolutePath, _this.name);
             });
-        };
-        FileDb.prototype.putFileContent = function (identifier, data, cb) {
         };
         FileDb.prototype.rm = function (absolutePath, cb) {
             var _this = this;

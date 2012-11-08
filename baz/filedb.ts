@@ -531,6 +531,56 @@ class FileDb implements IFileDb {
         });
     }
 
+    putFileContent(contentId : IGuid, data : any, cb? : (IResponse) => any) : void;
+    putFileContent(absolutePath : string, data : any, cb? : (IResponse) => any) : void;
+    putFileContent(identifier : any, data : any, cb? : (IResponse) => any) : void {
+        if (!cb) {
+            cb = FileDb._NOOP;
+        }
+
+        var task : ITask,
+            transactionConfig : ITransactionConfig = {
+                mode        : FileDb._READ_ONLY,
+                initMsg     : ['INFO: Starting transaction to save file contents of "', identifier, '" to database "', this.name, '"...'].join(''),
+                successMsg  : ['\tSUCCESS: Transaction for saving file contents of "', identifier, '" to database "', this.name, '" completed.'].join(''),
+                abortMsg    : ['\tFAILURE: Transaction aborted while saving file contents of "', identifier, '" to database "', this.name, '".'].join(''),
+                errorMsg    : ['\tFAILURE: Could not save "', identifier, '" to database "', this.name, '".'].join('')
+            };
+
+        // Resolve transaction and contentId based on type of identifier provided
+        if (typeof identifier === 'string') {
+            transactionConfig.stores = [FileDb._FILE_NODE_STORE, FileDb._FILE_CONTENT_STORE];
+            identifier = FileUtils.normalizePath(identifier);
+
+            task = this._getTransaction(transactionConfig, cb)
+                .next((transaction : IDBTransaction) => this._resolveContentId(identifier, transaction));
+        }
+        else if (identifier instanceof g.Guid) {
+            transactionConfig.stores = [FileDb._FILE_CONTENT_STORE];
+            task = this._getTransaction(transactionConfig, cb)
+                .next((transaction : IDBTransaction) => cb => cb((<g.Guid> identifier).value, transaction));
+        }
+        else {
+            cb({ success: false, error: ['Cannot not resolve file content with identifier "', identifier, '".'].join('')});
+            return;
+        }
+
+        task.done((contentId : string, transaction : IDBTransaction) => {
+            if (contentId) {
+                // Let the default 'oncomplete' transaction handler forward the response to our callback
+                // (i.e., no need to any completion/success handling here)
+                transaction.objectStore(FileDb._FILE_CONTENT_STORE).put(contentId)
+            }
+            else {
+                this._env.log(
+                    '\tWARNING: Cannot resolve file content with identifier "%s" (contentId: "%s").',
+                    identifier,
+                    contentId
+                );
+            }
+        });
+    }
+
     putFileNode(fileNodeData : IFileNodeData, cb? : (IResponse) => any) {
         if (!cb) {
             cb = FileDb._NOOP;
@@ -561,11 +611,7 @@ class FileDb implements IFileDb {
             );
     }
 
-    putFileContent(contentId : IGuid, data : any, cb? : (IResponse) => any) : void;
-    putFileContent(absolutePath : string, data : any, cb? : (IResponse) => any) : void;
-    putFileContent(identifier : any, data : any, cb? : (IResponse) => any) : void {
 
-    }
 
     rm(absolutePath : string, cb? : (IResponse) => any) {
         if (!cb) {
