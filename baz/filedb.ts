@@ -10,6 +10,7 @@ interface ITransactionConfig {
     errorMsg    : string;
     abortMsg    : string;
     successMsg  : string;
+    cb          : (response : IResponse) => any;
 }
 
 class FileNode implements IFileNode {
@@ -196,7 +197,7 @@ class FileDb implements IFileDb {
     }
 
     private _openDb() {
-        return async.newTask(cb => {
+        return (cb : (db : IDBDatabase) => any) => {
             if (FileDb._OPEN_DBS.hasOwnProperty(this.name)) {
                 cb(FileDb._OPEN_DBS[this.name]);
                 return;
@@ -232,7 +233,7 @@ class FileDb implements IFileDb {
                         break;
                 }
             }
-        });
+        };
     }
 
     private _initDb(db : IDBDatabase) {
@@ -271,8 +272,8 @@ class FileDb implements IFileDb {
             };
     }
 
-    private _getTransaction(config : ITransactionConfig, cb : (IResponse) => any) {
-        return this._openDb().next((db : IDBDatabase) => {
+    private _getTransaction(db : IDBDatabase, config : ITransactionConfig) {
+        return (cb : (transaction : IDBTransaction) => any) => {
             var stores = config.stores;
 
             if (!stores || config.stores.length < 1) {
@@ -285,21 +286,21 @@ class FileDb implements IFileDb {
 
             transaction.onerror = (ev) => {
                 this._env.log(config.errorMsg);
-                cb({ success: false, error: (<any> ev.target).error });
+                config.cb({ success: false, error: (<any> ev.target).error });
             }
 
             transaction.onabort = (ev) => {
                 this._env.log(config.abortMsg);
-                cb({ success: false, error: (<any> ev.target).error });
+                config.cb({ success: false, error: (<any> ev.target).error });
             }
 
             transaction.oncomplete = (ev) => {
                 this._env.log(config.successMsg);
-                cb({ success: true, result: (<any> ev.target).result });
+                config.cb({ success: true, result: (<any> ev.target).result });
             }
 
-            return cb => cb(transaction);
-        });
+            cb(transaction);
+        }
     }
 
     private _addChildReferenceFor(file : FileNode, transaction : IDBTransaction) {
@@ -395,8 +396,8 @@ class FileDb implements IFileDb {
         destination     : string, 
         transaction     : IDBTransaction,
         detachContent   = false
-    ) : ICallback {
-        return cb => transaction
+    ) {
+        return (cb : (sourceNode : FileNode, destinationNode : FileNode, transaction : IDBTransaction) => any) => transaction
             .objectStore(FileDb._FILE_NODE_STORE)
             .get(source)
             .onsuccess = (ev) => {
@@ -439,152 +440,127 @@ class FileDb implements IFileDb {
         }
     }
 
-    private _resolveContentId(absolutePath : string, transaction : IDBTransaction) : ICallback {
-        return cb => transaction
-            .objectStore(FileDb._FILE_NODE_STORE)
-            .get(absolutePath)
-            .onsuccess = ev => {
-                var fileNodeData : IFileNodeData = (<any> ev.target).result;
-                cb(fileNodeData.contentId, transaction);
+    private _resolveContentId(transaction : IDBTransaction, identifier : any) {
+        var fail = () => {
+            this._env.log(
+                '\tFAILURE: Cannot resolve file content with identifier "%s" (contentId: "%s").',
+                identifier
+            );
+            transaction.abort();
+        }
+
+        if (typeof identifier === 'string') {
+            identifier = FileUtils.normalizePath(identifier);
+
+            return (cb : (contentId : string, transaction : IDBTransaction) => any) => transaction
+                .objectStore(FileDb._FILE_NODE_STORE)
+                .get(identifier)
+                .onsuccess = ev => {
+                    var fileNodeData : IFileNodeData = (<any> ev.target).result;
+                    if (!fileNodeData.contentId) {
+                        fail();
+                    }
+                    cb(fileNodeData.contentId, transaction);
+                }
+        }
+        else if (identifier instanceof g.Guid) {
+            return (cb : (contentId : string, transaction : IDBTransaction) => any) => {
+                var contentId = (<g.Guid> identifier).value;
+                if (!contentId) {
+                    fail();
+                }
+                cb(contentId, transaction);
             }
+        }
+        else fail();
     }
 
-    getFileNode(absolutePath : string, cb : (IResponse) => any) {
-        if (!cb) {
-            return;
-        }
+    getFileNode(absolutePath : string, cb : (response : IResponse) => any) {
+        if (!cb) return;
 
         absolutePath = FileUtils.normalizePath(absolutePath);
 
         this._env.log('INFO: Getting "%s" from database "%s"...', absolutePath, this.name);
 
-        this._openDb().done((db : IDBDatabase) => {
-            var request = db.transaction(FileDb._FILE_NODE_STORE, FileDb._READ_ONLY)
-                            .objectStore(FileDb._FILE_NODE_STORE)
-                            .get(absolutePath);
+        async
+            .newTask(this._openDb())
+            .done((db : IDBDatabase) => {
+                var request = db.transaction(FileDb._FILE_NODE_STORE, FileDb._READ_ONLY)
+                                .objectStore(FileDb._FILE_NODE_STORE)
+                                .get(absolutePath);
 
-            request.onsuccess = (ev) => {
-                if (typeof(request.result) === 'undefined') {
-                    this._env.log('\tERROR: No file found at path "%s" in database "%s".', absolutePath, this.name);
-                    cb({ success: false, error: ['No file found at path "', absolutePath, '" in database "', this.name, '".'].join('') });
+                request.onsuccess = (ev) => {
+                    if (typeof(request.result) === 'undefined') {
+                        this._env.log('\tERROR: No file found at path "%s" in database "%s".', absolutePath, this.name);
+                        cb({ success: false, error: ['No file found at path "', absolutePath, '" in database "', this.name, '".'].join('') });
+                    }
+                    else {
+                        this._env.log('\tSUCCESS: Got "%s" from database "%s".', absolutePath, this.name);
+                        cb({ success: true, result: new FileNode(request.result) });
+                    }
                 }
-                else {
-                    this._env.log('\tSUCCESS: Got "%s" from database "%s".', absolutePath, this.name);
-                    cb({ success: true, result: new FileNode(request.result) });
-                }
-            }
 
-            request.onerror = (ev) => {
-                this._env.log('\tFAILURE: Could not get "%s" from database "%s".', absolutePath, this.name);
-                cb({ success: false, error: request.error });
-            }
-        });
+                request.onerror = (ev) => {
+                    this._env.log('\tFAILURE: Could not get "%s" from database "%s".', absolutePath, this.name);
+                    cb({ success: false, error: request.error });
+                }
+            });
     }
 
-    getFileContent(contentId : g.Guid, cb : (IResponse) => any) : void;
-    getFileContent(absolutePath : string, cb : (IResponse) => any) : void;
-    getFileContent(identifier : any, cb : (IResponse) => any) : void {
-        if (!cb) {
-            return;
-        }
+    getFileContent(contentId : g.Guid, cb : (response : IResponse) => any) : void;
+    getFileContent(absolutePath : string, cb : (response : IResponse) => any) : void;
+    getFileContent(identifier : any, cb : (response : IResponse) => any) : void {
+        if (!cb) return;
 
-        var task : ITask,
-            transactionConfig : ITransactionConfig = {
-                mode        : FileDb._READ_ONLY,
-                initMsg     : ['INFO: Starting transaction to get file contents of "', identifier, '" from database "', this.name, '"...'].join(''),
-                successMsg  : ['\tSUCCESS: Transaction for getting file contents of "', identifier, '" from database "', this.name, '" completed.'].join(''),
-                abortMsg    : ['\tFAILURE: Transaction aborted while getting file contents of "', identifier, '" from database "', this.name, '".'].join(''),
-                errorMsg    : ['\tFAILURE: Could not get "', identifier, '" from database "', this.name, '".'].join('')
-            };
+        var transactionConfig : ITransactionConfig = {
+            mode        : FileDb._READ_ONLY,
+            stores      : [ FileDb._FILE_NODE_STORE, FileDb._FILE_CONTENT_STORE ],
+            initMsg     : ['INFO: Starting transaction to get file contents of "', identifier, '" from database "', this.name, '"...'].join(''),
+            successMsg  : ['\tSUCCESS: Transaction for getting file contents of "', identifier, '" from database "', this.name, '" completed.'].join(''),
+            abortMsg    : ['\tFAILURE: Transaction aborted while getting file contents of "', identifier, '" from database "', this.name, '".'].join(''),
+            errorMsg    : ['\tFAILURE: Could not get "', identifier, '" from database "', this.name, '".'].join(''),
+            cb          : cb
+        };
 
-        // Resolve transaction and contentId based on type of identifier provided
-        if (typeof identifier === 'string') {
-            transactionConfig.stores = [FileDb._FILE_NODE_STORE, FileDb._FILE_CONTENT_STORE];
-            identifier = FileUtils.normalizePath(identifier);
-
-            task = this._getTransaction(transactionConfig, cb)
-                .next((transaction : IDBTransaction) => this._resolveContentId(identifier, transaction));
-        }
-        else if (identifier instanceof g.Guid) {
-            transactionConfig.stores = [FileDb._FILE_CONTENT_STORE];
-            task = this._getTransaction(transactionConfig, cb)
-                .next((transaction : IDBTransaction) => cb => cb((<g.Guid> identifier).value, transaction));
-        }
-        else {
-            cb({ success: false, error: ['Cannot not resolve file content with identifier "', identifier, '".'].join('')});
-            return;
-        }
-
-        task.done((contentId : string, transaction : IDBTransaction) => {
-            if (contentId) {
+        async
+            .newTask(this._openDb())
+            .next((db : IDBDatabase) => this._getTransaction(db, transactionConfig))
+            .next((transaction : IDBTransaction) => this._resolveContentId(transaction, identifier))
+            .done((contentId : string, transaction : IDBTransaction) =>
                 // Let the default 'oncomplete' transaction handler forward the response to our callback
                 // (i.e., no need to any completion/success handling here)
                 transaction.objectStore(FileDb._FILE_CONTENT_STORE).get(contentId)
-            }
-            else {
-                this._env.log(
-                    '\tWARNING: Cannot resolve file content with identifier "%s" (contentId: "%s").',
-                    identifier,
-                    contentId
-                );
-            }
-        });
+            );
     }
 
-    putFileContent(contentId : IGuid, data : any, cb? : (IResponse) => any) : void;
-    putFileContent(absolutePath : string, data : any, cb? : (IResponse) => any) : void;
-    putFileContent(identifier : any, data : any, cb? : (IResponse) => any) : void {
-        if (!cb) {
-            cb = FileDb._NOOP;
-        }
+    putFileContent(contentId : IGuid, data : any, cb? : (response : IResponse) => any) : void;
+    putFileContent(absolutePath : string, data : any, cb? : (response : IResponse) => any) : void;
+    putFileContent(identifier : any, data : any, cb? : (response : IResponse) => any) : void {
+        if (!cb) cb = FileDb._NOOP;
 
-        var task : ITask,
-            transactionConfig : ITransactionConfig = {
-                mode        : FileDb._READ_ONLY,
-                initMsg     : ['INFO: Starting transaction to save file contents of "', identifier, '" to database "', this.name, '"...'].join(''),
-                successMsg  : ['\tSUCCESS: Transaction for saving file contents of "', identifier, '" to database "', this.name, '" completed.'].join(''),
-                abortMsg    : ['\tFAILURE: Transaction aborted while saving file contents of "', identifier, '" to database "', this.name, '".'].join(''),
-                errorMsg    : ['\tFAILURE: Could not save "', identifier, '" to database "', this.name, '".'].join('')
-            };
+        var transactionConfig : ITransactionConfig = {
+            mode        : FileDb._READ_WRITE,
+            stores      : [ FileDb._FILE_NODE_STORE, FileDb._FILE_CONTENT_STORE ],
+            initMsg     : ['INFO: Starting transaction to save file contents of "', identifier, '" to database "', this.name, '"...'].join(''),
+            successMsg  : ['\tSUCCESS: Transaction for saving file contents of "', identifier, '" to database "', this.name, '" completed.'].join(''),
+            abortMsg    : ['\tFAILURE: Transaction aborted while saving file contents of "', identifier, '" to database "', this.name, '".'].join(''),
+            errorMsg    : ['\tFAILURE: Could not save "', identifier, '" to database "', this.name, '".'].join(''),
+            cb          : cb
+        };
 
-        // Resolve transaction and contentId based on type of identifier provided
-        if (typeof identifier === 'string') {
-            transactionConfig.stores = [FileDb._FILE_NODE_STORE, FileDb._FILE_CONTENT_STORE];
-            identifier = FileUtils.normalizePath(identifier);
-
-            task = this._getTransaction(transactionConfig, cb)
-                .next((transaction : IDBTransaction) => this._resolveContentId(identifier, transaction));
-        }
-        else if (identifier instanceof g.Guid) {
-            transactionConfig.stores = [FileDb._FILE_CONTENT_STORE];
-            task = this._getTransaction(transactionConfig, cb)
-                .next((transaction : IDBTransaction) => cb => cb((<g.Guid> identifier).value, transaction));
-        }
-        else {
-            cb({ success: false, error: ['Cannot not resolve file content with identifier "', identifier, '".'].join('')});
-            return;
-        }
-
-        task.done((contentId : string, transaction : IDBTransaction) => {
-            if (contentId) {
+        async
+            .newTask(this._openDb())
+            .next((db : IDBDatabase) => this._getTransaction(db, transactionConfig))
+            .next((transaction : IDBTransaction) => this._resolveContentId(transaction, identifier))
+            .done((contentId : string, transaction : IDBTransaction) =>
                 // Let the default 'oncomplete' transaction handler forward the response to our callback
                 // (i.e., no need to any completion/success handling here)
-                transaction.objectStore(FileDb._FILE_CONTENT_STORE).put(contentId)
-            }
-            else {
-                this._env.log(
-                    '\tWARNING: Cannot resolve file content with identifier "%s" (contentId: "%s").',
-                    identifier,
-                    contentId
-                );
-            }
-        });
+                transaction.objectStore(FileDb._FILE_CONTENT_STORE).put(data, contentId)
+            );
     }
 
-    putFileNode(fileNodeData : IFileNodeData, cb? : (IResponse) => any) {
-        if (!cb) {
-            cb = FileDb._NOOP;
-        }
+    putFileNode(fileNodeData : IFileNodeData, cb? : (response : IResponse) => any) {
+        if (!cb) cb = FileDb._NOOP;
 
         var fileNode = new FileNode(fileNodeData);
 
@@ -593,10 +569,13 @@ class FileDb implements IFileDb {
             initMsg     : ['INFO: Starting transaction to save "', fileNode.absolutePath, '" to database "', this.name, '"...'].join(''),
             successMsg  : ['\tSUCCESS: Transaction for saving "', fileNode.absolutePath, '" to database "', this.name, '" completed.'].join(''),
             abortMsg    : ['\tFAILURE: Transaction aborted while saving "', fileNode.absolutePath, '" to database "', this.name, '".'].join(''),
-            errorMsg    : ['\tFAILURE: Could not save "', fileNode.absolutePath, '" to database "', this.name, '".'].join('')
+            errorMsg    : ['\tFAILURE: Could not save "', fileNode.absolutePath, '" to database "', this.name, '".'].join(''),
+            cb          : cb
         };
 
-        this._getTransaction(transactionConfig, cb)
+        async
+            .newTask(this._openDb())
+            .next((db : IDBDatabase) => this._getTransaction(db, transactionConfig))
             .next((transaction : IDBTransaction) => {
                 this._addChildReferenceFor(fileNode, transaction);
 
@@ -613,10 +592,8 @@ class FileDb implements IFileDb {
 
 
 
-    rm(absolutePath : string, cb? : (IResponse) => any) {
-        if (!cb) {
-            cb = FileDb._NOOP;
-        }
+    rm(absolutePath : string, cb? : (response : IResponse) => any) {
+        if (!cb) cb = FileDb._NOOP;
 
         absolutePath = FileUtils.normalizePath(absolutePath);
 
@@ -626,10 +603,13 @@ class FileDb implements IFileDb {
             initMsg     : ['INFO: Starting transaction to remove "', absolutePath, '" from database "', this.name, '"...'].join(''),
             successMsg  : ['\tSUCCESS: Transaction for removal of "', absolutePath, '" from database "', this.name, '" completed.'].join(''),
             errorMsg    : ['\tFAILURE: Could not remove "', absolutePath, '" from database "', this.name, '".'].join(''),
-            abortMsg    : ['\tFAILURE: Transaction aborted while deleting "', absolutePath, '" from database "', this.name, '".'].join('')
+            abortMsg    : ['\tFAILURE: Transaction aborted while deleting "', absolutePath, '" from database "', this.name, '".'].join(''),
+            cb          : cb
         };
 
-        this._getTransaction(transactionConfig, cb)
+        async
+            .newTask(this._openDb())
+            .next((db : IDBDatabase) => this._getTransaction(db, transactionConfig))
             .next((transaction : IDBTransaction) => {
                 this._removeChildReferenceFor(absolutePath, transaction);
 
@@ -670,10 +650,8 @@ class FileDb implements IFileDb {
             );
     }
 
-    cp(source : string, destination : string, cb? : (IResponse) => any) {
-        if (!cb) {
-            cb = FileDb._NOOP;
-        }
+    cp(source : string, destination : string, cb? : (response : IResponse) => any) {
+        if (!cb) cb = FileDb._NOOP;
 
         source      = FileUtils.normalizePath(source);
         destination = FileUtils.normalizePath(destination);
@@ -684,10 +662,13 @@ class FileDb implements IFileDb {
             initMsg     : ['INFO: Starting transaction to copy "', source, '" to "', destination, '" in database "', this.name, '"...'].join(''),
             successMsg  : ['\tSUCCESS: Transaction for copying "', source, '" to "', destination, '" in database "', this.name, '" completed.'].join(''),
             errorMsg    : ['\tFAILURE: Could not copy "', source, '" to "', destination, '" in database "', this.name, '".'].join(''),
-            abortMsg    : ['\tFAILURE: Transaction aborted while copying "', source, '" to "', destination, '" in database "', this.name, '".'].join('')
+            abortMsg    : ['\tFAILURE: Transaction aborted while copying "', source, '" to "', destination, '" in database "', this.name, '".'].join(''),
+            cb          : cb
         };
 
-        this._getTransaction(transactionConfig, cb)
+        async
+            .newTask(this._openDb())
+            .next((db : IDBDatabase) => this._getTransaction(db, transactionConfig))
             .next((transaction : IDBTransaction) => this._cpFileNodeBranch(source, destination, transaction, true))
             .next((sourceNode : FileNode, destinationNode : FileNode, transaction : IDBTransaction) =>
                 cb => transaction
@@ -706,10 +687,8 @@ class FileDb implements IFileDb {
             );
     }
 
-    mv(source : string, destination : string, cb? : (IResponse) => any) {
-        if (!cb) {
-            cb = FileDb._NOOP;
-        }
+    mv(source : string, destination : string, cb? : (response : IResponse) => any) {
+        if (!cb) cb = FileDb._NOOP;
 
         source      = FileUtils.normalizePath(source);
         destination = FileUtils.normalizePath(destination);
@@ -719,10 +698,12 @@ class FileDb implements IFileDb {
             initMsg     : ['INFO: Starting transaction to move "', source, '" to "', destination, '" in database "', this.name, '"...'].join(''),
             successMsg  : ['\tSUCCESS: Transaction for moving "', source, '" to "', destination, '" in database "', this.name, '" completed.'].join(''),
             errorMsg    : ['\tFAILURE: Could not move "', source, '" to "', destination, '" in database "', this.name, '".'].join(''),
-            abortMsg    : ['\tFAILURE: Transaction aborted while moving "', source, '" to "', destination, '" in database "', this.name, '".'].join('')
+            abortMsg    : ['\tFAILURE: Transaction aborted while moving "', source, '" to "', destination, '" in database "', this.name, '".'].join(''),
+            cb          : cb
         };
 
-        this._getTransaction(transactionConfig, cb)
+        async.newTask(this._openDb())
+            .next((db : IDBDatabase) => this._getTransaction(db, transactionConfig))
             .next((transaction : IDBTransaction) => {
                 this._removeChildReferenceFor(source, transaction);
                 return this._cpFileNodeBranch(source, destination, transaction)

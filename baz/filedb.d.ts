@@ -52,13 +52,13 @@ interface IFileDb {
     version             : number;
     utils               : IFileUtils;
 
-    getFileNode(absolutePath : string, cb : (IResponse) => any) : void;
-    putFileNode(data : IFileNodeData, cb? : (IResponse) => any) : void;
-    getFileContent(contentId : IGuid, cb : (IResponse) => any) : void;
-    getFileContent(absolutePath : string, cb : (IResponse) => any) : void;
-    putFileContent(contentId : IGuid, data : any, cb? : (IResponse) => any) : void;
-    putFileContent(absolutePath : string, data : any, cb? : (IResponse) => any) : void;
-    rm(absolutePath : string, cb? : (IResponse) => any) : void;
-    cp(source : string, destination : string, cb? : (IResponse) => any) : void;
-    mv(source : string, destination : string, cb? : (IResponse) => any) : void;   
+    getFileNode(absolutePath : string, cb : (response : IResponse) => any) : void;
+    putFileNode(data : IFileNodeData, cb? : (response : IResponse) => any) : void;
+    getFileContent(contentId : IGuid, cb : (response : IResponse) => any) : void;
+    getFileContent(absolutePath : string, cb : (response : IResponse) => any) : void;
+    putFileContent(contentId : IGuid, data : any, cb? : (response : IResponse) => any) : void;
+    putFileContent(absolutePath : string, data : any, cb? : (response : IResponse) => any) : void;
+    rm(absolutePath : string, cb? : (response : IResponse) => any) : void;
+    cp(source : string, destination : string, cb? : (response : IResponse) => any) : void;
+    mv(source : string, destination : string, cb? : (response : IResponse) => any) : void;   
 }

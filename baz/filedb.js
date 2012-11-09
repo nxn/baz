@@ -180,7 +180,7 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
         });
         FileDb.prototype._openDb = function () {
             var _this = this;
-            return async.newTask(function (cb) {
+            return function (cb) {
                 if(FileDb._OPEN_DBS.hasOwnProperty(_this.name)) {
                     cb(FileDb._OPEN_DBS[_this.name]);
                     return;
@@ -207,7 +207,7 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
                         }
                     }
                 };
-            });
+            }
         };
         FileDb.prototype._initDb = function (db) {
             var _this = this;
@@ -229,9 +229,9 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
                 _this._env.log('\tFAILURE: Could not create ROOT in database "%s".', _this.name);
             };
         };
-        FileDb.prototype._getTransaction = function (config, cb) {
+        FileDb.prototype._getTransaction = function (db, config) {
             var _this = this;
-            return this._openDb().next(function (db) {
+            return function (cb) {
                 var stores = config.stores;
                 if(!stores || config.stores.length < 1) {
                     stores = [
@@ -242,29 +242,27 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
                 _this._env.log(config.initMsg);
                 transaction.onerror = function (ev) {
                     _this._env.log(config.errorMsg);
-                    cb({
+                    config.cb({
                         success: false,
                         error: (ev.target).error
                     });
                 };
                 transaction.onabort = function (ev) {
                     _this._env.log(config.abortMsg);
-                    cb({
+                    config.cb({
                         success: false,
                         error: (ev.target).error
                     });
                 };
                 transaction.oncomplete = function (ev) {
                     _this._env.log(config.successMsg);
-                    cb({
+                    config.cb({
                         success: true,
                         result: (ev.target).result
                     });
                 };
-                return function (cb) {
-                    return cb(transaction);
-                }
-            });
+                cb(transaction);
+            }
         };
         FileDb.prototype._addChildReferenceFor = function (file, transaction) {
             var _this = this;
@@ -359,12 +357,35 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
                 };
             }
         };
-        FileDb.prototype._resolveContentId = function (absolutePath, transaction) {
-            return function (cb) {
-                return transaction.objectStore(FileDb._FILE_NODE_STORE).get(absolutePath).onsuccess = function (ev) {
-                    var fileNodeData = (ev.target).result;
-                    cb(fileNodeData.contentId, transaction);
-                };
+        FileDb.prototype._resolveContentId = function (transaction, identifier) {
+            var _this = this;
+            var fail = function () {
+                _this._env.log('\tFAILURE: Cannot resolve file content with identifier "%s" (contentId: "%s").', identifier);
+                transaction.abort();
+            };
+            if(typeof identifier === 'string') {
+                identifier = FileUtils.normalizePath(identifier);
+                return function (cb) {
+                    return transaction.objectStore(FileDb._FILE_NODE_STORE).get(identifier).onsuccess = function (ev) {
+                        var fileNodeData = (ev.target).result;
+                        if(!fileNodeData.contentId) {
+                            fail();
+                        }
+                        cb(fileNodeData.contentId, transaction);
+                    };
+                }
+            } else {
+                if(identifier instanceof g.Guid) {
+                    return function (cb) {
+                        var contentId = (identifier).value;
+                        if(!contentId) {
+                            fail();
+                        }
+                        cb(contentId, transaction);
+                    }
+                } else {
+                    fail();
+                }
             }
         };
         FileDb.prototype.getFileNode = function (absolutePath, cb) {
@@ -374,7 +395,7 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
             }
             absolutePath = FileUtils.normalizePath(absolutePath);
             this._env.log('INFO: Getting "%s" from database "%s"...', absolutePath, this.name);
-            this._openDb().done(function (db) {
+            async.newTask(this._openDb()).done(function (db) {
                 var request = db.transaction(FileDb._FILE_NODE_STORE, FileDb._READ_ONLY).objectStore(FileDb._FILE_NODE_STORE).get(absolutePath);
                 request.onsuccess = function (ev) {
                     if(typeof (request.result) === 'undefined') {
@@ -411,9 +432,12 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
             if(!cb) {
                 return;
             }
-            var task;
             var transactionConfig = {
                 mode: FileDb._READ_ONLY,
+                stores: [
+                    FileDb._FILE_NODE_STORE, 
+                    FileDb._FILE_CONTENT_STORE
+                ],
                 initMsg: [
                     'INFO: Starting transaction to get file contents of "', 
                     identifier, 
@@ -441,46 +465,15 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
                     '" from database "', 
                     this.name, 
                     '".'
-                ].join('')
+                ].join(''),
+                cb: cb
             };
-
-            if(typeof identifier === 'string') {
-                transactionConfig.stores = [
-                    FileDb._FILE_NODE_STORE, 
-                    FileDb._FILE_CONTENT_STORE
-                ];
-                identifier = FileUtils.normalizePath(identifier);
-                task = this._getTransaction(transactionConfig, cb).next(function (transaction) {
-                    return _this._resolveContentId(identifier, transaction);
-                });
-            } else {
-                if(identifier instanceof g.Guid) {
-                    transactionConfig.stores = [
-                        FileDb._FILE_CONTENT_STORE
-                    ];
-                    task = this._getTransaction(transactionConfig, cb).next(function (transaction) {
-                        return function (cb) {
-                            return cb((identifier).value, transaction);
-                        }
-                    });
-                } else {
-                    cb({
-                        success: false,
-                        error: [
-                            'Cannot not resolve file content with identifier "', 
-                            identifier, 
-                            '".'
-                        ].join('')
-                    });
-                    return;
-                }
-            }
-            task.done(function (contentId, transaction) {
-                if(contentId) {
-                    transaction.objectStore(FileDb._FILE_CONTENT_STORE).get(contentId);
-                } else {
-                    _this._env.log('\tWARNING: Cannot resolve file content with identifier "%s" (contentId: "%s").', identifier, contentId);
-                }
+            async.newTask(this._openDb()).next(function (db) {
+                return _this._getTransaction(db, transactionConfig);
+            }).next(function (transaction) {
+                return _this._resolveContentId(transaction, identifier);
+            }).done(function (contentId, transaction) {
+                return transaction.objectStore(FileDb._FILE_CONTENT_STORE).get(contentId);
             });
         };
         FileDb.prototype.putFileContent = function (identifier, data, cb) {
@@ -488,9 +481,12 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
             if(!cb) {
                 cb = FileDb._NOOP;
             }
-            var task;
             var transactionConfig = {
-                mode: FileDb._READ_ONLY,
+                mode: FileDb._READ_WRITE,
+                stores: [
+                    FileDb._FILE_NODE_STORE, 
+                    FileDb._FILE_CONTENT_STORE
+                ],
                 initMsg: [
                     'INFO: Starting transaction to save file contents of "', 
                     identifier, 
@@ -518,46 +514,15 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
                     '" to database "', 
                     this.name, 
                     '".'
-                ].join('')
+                ].join(''),
+                cb: cb
             };
-
-            if(typeof identifier === 'string') {
-                transactionConfig.stores = [
-                    FileDb._FILE_NODE_STORE, 
-                    FileDb._FILE_CONTENT_STORE
-                ];
-                identifier = FileUtils.normalizePath(identifier);
-                task = this._getTransaction(transactionConfig, cb).next(function (transaction) {
-                    return _this._resolveContentId(identifier, transaction);
-                });
-            } else {
-                if(identifier instanceof g.Guid) {
-                    transactionConfig.stores = [
-                        FileDb._FILE_CONTENT_STORE
-                    ];
-                    task = this._getTransaction(transactionConfig, cb).next(function (transaction) {
-                        return function (cb) {
-                            return cb((identifier).value, transaction);
-                        }
-                    });
-                } else {
-                    cb({
-                        success: false,
-                        error: [
-                            'Cannot not resolve file content with identifier "', 
-                            identifier, 
-                            '".'
-                        ].join('')
-                    });
-                    return;
-                }
-            }
-            task.done(function (contentId, transaction) {
-                if(contentId) {
-                    transaction.objectStore(FileDb._FILE_CONTENT_STORE).put(contentId);
-                } else {
-                    _this._env.log('\tWARNING: Cannot resolve file content with identifier "%s" (contentId: "%s").', identifier, contentId);
-                }
+            async.newTask(this._openDb()).next(function (db) {
+                return _this._getTransaction(db, transactionConfig);
+            }).next(function (transaction) {
+                return _this._resolveContentId(transaction, identifier);
+            }).done(function (contentId, transaction) {
+                return transaction.objectStore(FileDb._FILE_CONTENT_STORE).put(data, contentId);
             });
         };
         FileDb.prototype.putFileNode = function (fileNodeData, cb) {
@@ -595,9 +560,12 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
                     '" to database "', 
                     this.name, 
                     '".'
-                ].join('')
+                ].join(''),
+                cb: cb
             };
-            this._getTransaction(transactionConfig, cb).next(function (transaction) {
+            async.newTask(this._openDb()).next(function (db) {
+                return _this._getTransaction(db, transactionConfig);
+            }).next(function (transaction) {
                 _this._addChildReferenceFor(fileNode, transaction);
                 return function (cb) {
                     return transaction.objectStore(FileDb._FILE_NODE_STORE).put(fileNode.cloneFileNodeData(), fileNode.absolutePath).onsuccess = cb;
@@ -645,9 +613,12 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
                     '" from database "', 
                     this.name, 
                     '".'
-                ].join('')
+                ].join(''),
+                cb: cb
             };
-            this._getTransaction(transactionConfig, cb).next(function (transaction) {
+            async.newTask(this._openDb()).next(function (db) {
+                return _this._getTransaction(db, transactionConfig);
+            }).next(function (transaction) {
                 _this._removeChildReferenceFor(absolutePath, transaction);
                 return function (cb) {
                     return transaction.objectStore(FileDb._FILE_NODE_STORE).get(absolutePath).onsuccess = function (ev) {
@@ -725,9 +696,12 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
                     '" in database "', 
                     this.name, 
                     '".'
-                ].join('')
+                ].join(''),
+                cb: cb
             };
-            this._getTransaction(transactionConfig, cb).next(function (transaction) {
+            async.newTask(this._openDb()).next(function (db) {
+                return _this._getTransaction(db, transactionConfig);
+            }).next(function (transaction) {
                 return _this._cpFileNodeBranch(source, destination, transaction, true);
             }).next(function (sourceNode, destinationNode, transaction) {
                 return function (cb) {
@@ -789,9 +763,12 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
                     '" in database "', 
                     this.name, 
                     '".'
-                ].join('')
+                ].join(''),
+                cb: cb
             };
-            this._getTransaction(transactionConfig, cb).next(function (transaction) {
+            async.newTask(this._openDb()).next(function (db) {
+                return _this._getTransaction(db, transactionConfig);
+            }).next(function (transaction) {
                 _this._removeChildReferenceFor(source, transaction);
                 return _this._cpFileNodeBranch(source, destination, transaction);
             }).next(function (sourceNode, destinationNode, transaction) {
