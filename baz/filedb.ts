@@ -702,7 +702,8 @@ class FileDb implements IFileDb {
             cb          : cb
         };
 
-        async.newTask(this._openDb())
+        async
+            .newTask(this._openDb())
             .next((db : IDBDatabase) => this._getTransaction(db, transactionConfig))
             .next((transaction : IDBTransaction) => {
                 this._removeChildReferenceFor(source, transaction);
