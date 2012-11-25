@@ -80,7 +80,7 @@ class FSTreeNode implements IFSTreeNode {
         var $add     = $('<div/>').appendTo($actions).addClass('add');
         var $remove  = $('<div/>').appendTo($actions).addClass('remove');
 
-        var $contents       = $('<div/>').appendTo(this._$this).addClass('content');
+        var $contents = $('<div/>').appendTo(this._$this).addClass('content');
 
         if (this.nodes) {
             for (var i = 0, node : IFSTreeNode; node = this.nodes[i]; i++) {

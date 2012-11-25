@@ -156,6 +156,9 @@ define(["require", "exports", "./async", "./guid"], function(require, exports, _
             return aPriority > bPriority ? 1 : -1;
         };
         FSTreeNode.prototype._compareName = function (a, b) {
+            if(a._file.name === b._file.name) {
+                return 0;
+            }
             return a._file.name > b._file.name ? 1 : -1;
         };
         FSTreeNode.prototype._compareFn = function (a, b) {
