@@ -121,28 +121,35 @@ class FSTreeNode implements IFSTreeNode {
     }
 
     refresh(cb? : ICallback) {
-        if (!this.isOpen) {
-            return;
-        }
-
         this._$this.children('.content').empty()
-
-        var i = 0, asyncOps = new Array(this._file.childCount);
-
-        this._file.forEachChild((child : IChildNode) => {
-            asyncOps[i++] = (cb =>
-                this._db.getFileNode(
-                    this._db.utils.getAbsolutePath({
-                        name    : child.name,
-                        location: this._file.absolutePath
-                    }),
-                    cb
-                )
-            );
-        });
+        var absolutePath = this._file.absolutePath;
 
         async
-            .newTaskSeq(asyncOps)
+            .newTask((cb) => this._db.getFileNode(absolutePath, cb))
+            .next((response : IResponse) => {
+                if (!response.success) {
+                    this._env.log('Error refreshing "%s"', absolutePath);
+                    return;
+                }
+
+                this._file = response.result;
+                var i = 0, asyncOps = new Array(this._file.childCount);
+
+                this._file.forEachChild((child : IChildNode) => {
+                    asyncOps[i++] = (cb =>
+                        this._db.getFileNode(
+                            this._db.utils.getAbsolutePath({
+                                name    : child.name,
+                                location: this._file.absolutePath
+                            }),
+                            cb
+                        )
+                    );
+                });
+
+                // redundant lambda necessary for binding the context
+                return cb => async.newTaskSeq(asyncOps).done(cb);
+            })
             .done(
                 function(...argArray : IArguments[]) => {
                     var response : IResponse;
@@ -166,6 +173,7 @@ class FSTreeNode implements IFSTreeNode {
                         );
                     }
 
+                    // redundant lambda necessary for binding the context
                     this.nodes = nodes.sort(
                         (a : FSTreeNode, b : FSTreeNode) => this._compareFn(a, b)
                     );

@@ -93,22 +93,29 @@ define(["require", "exports", "./async", "./guid"], function(require, exports, _
         };
         FSTreeNode.prototype.refresh = function (cb) {
             var _this = this;
-            if(!this.isOpen) {
-                return;
-            }
             this._$this.children('.content').empty();
-            var i = 0;
-            var asyncOps = new Array(this._file.childCount);
-
-            this._file.forEachChild(function (child) {
-                asyncOps[i++] = (function (cb) {
-                    return _this._db.getFileNode(_this._db.utils.getAbsolutePath({
-                        name: child.name,
-                        location: _this._file.absolutePath
-                    }), cb);
+            var absolutePath = this._file.absolutePath;
+            async.newTask(function (cb) {
+                return _this._db.getFileNode(absolutePath, cb);
+            }).next(function (response) {
+                if(!response.success) {
+                    _this._env.log('Error refreshing "%s"', absolutePath);
+                    return;
+                }
+                _this._file = response.result;
+                var i = 0, asyncOps = new Array(_this._file.childCount);
+                _this._file.forEachChild(function (child) {
+                    asyncOps[i++] = (function (cb) {
+                        return _this._db.getFileNode(_this._db.utils.getAbsolutePath({
+                            name: child.name,
+                            location: _this._file.absolutePath
+                        }), cb);
+                    });
                 });
-            });
-            async.newTaskSeq(asyncOps).done(function () {
+                return function (cb) {
+                    return async.newTaskSeq(asyncOps).done(cb);
+                }
+            }).done(function () {
                 var argArray = [];
                 for (var _i = 0; _i < (arguments.length - 0); _i++) {
                     argArray[_i] = arguments[_i + 0];
@@ -132,13 +139,7 @@ define(["require", "exports", "./async", "./guid"], function(require, exports, _
             });
         };
         FSTreeNode.prototype._compareType = function (a, b) {
-            var aType = a._file.type;
-            var bType = b._file.type;
-            var aPriority = FSTreeNode._TYPE_ORDER[aType];
-            var bPriority = FSTreeNode._TYPE_ORDER[bType];
-            var aPriorityUndefined = typeof aPriority === 'undefined';
-            var bPriorityUndefined = typeof bPriority === 'undefined';
-
+            var aType = a._file.type, bType = b._file.type, aPriority = FSTreeNode._TYPE_ORDER[aType], bPriority = FSTreeNode._TYPE_ORDER[bType], aPriorityUndefined = typeof aPriority === 'undefined', bPriorityUndefined = typeof bPriority === 'undefined';
             if(aPriorityUndefined && bPriorityUndefined) {
                 return 0;
             }
@@ -254,4 +255,3 @@ define(["require", "exports", "./async", "./guid"], function(require, exports, _
     })();
     exports.FSTreeView = FSTreeView;    
 })
-

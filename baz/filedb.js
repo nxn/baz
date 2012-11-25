@@ -135,7 +135,6 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
         }
         FileUtils.getPathInfo = getPathInfo;
     })(FileUtils || (FileUtils = {}));
-
     var FileDb = (function () {
         function FileDb(config) {
             this.utils = FileUtils;
@@ -334,11 +333,7 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
                     }
                     var root = new FileNode(fileNodeData);
                     _this._traverseWithAction(transaction, root, function (fileNode) {
-                        var newNode = null;
-                        var newNodeData = null;
-                        var isRoot = fileNode.absolutePath === root.absolutePath;
-                        var newPathInfo = isRoot ? FileUtils.getPathInfo(destination) : FileUtils.getPathInfo(fileNode.absolutePath.replace(source, destination));
-
+                        var newNode = null, newNodeData = null, isRoot = fileNode.absolutePath === root.absolutePath, newPathInfo = isRoot ? FileUtils.getPathInfo(destination) : FileUtils.getPathInfo(fileNode.absolutePath.replace(source, destination));
                         newNodeData = {
                             name: newPathInfo.name,
                             location: newPathInfo.location,
@@ -788,4 +783,3 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
     }
     exports.open = open;
 })
-

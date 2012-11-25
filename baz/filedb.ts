@@ -3,6 +3,10 @@
 import async = module('./async');
 import g = module('./guid');
 
+interface IDBObjectStore {
+    delete(key : any) : IDBRequest;
+}
+
 interface ITransactionConfig {
     mode?       : string;
     stores?     : string[];
@@ -633,7 +637,7 @@ class FileDb implements IFileDb {
                         .objectStore(FileDb._FILE_NODE_STORE)
                         .delete(fileNode.absolutePath)
                         .onsuccess = ev => cb(fileNode, transaction)
-                );
+                )
             )
             .next((fileNode : FileNode, transaction : IDBTransaction) =>
                 cb => transaction

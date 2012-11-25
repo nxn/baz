@@ -176,4 +176,3 @@ define(["require", "exports", './filedb', './async', './tree-view'], function(re
         (window).fs = fs;
     });
 })
-
