@@ -215,6 +215,9 @@ class FSTreeNode implements IFSTreeNode {
     }
 
     private _compareName(a : FSTreeNode, b : FSTreeNode) : number {
+        if (a._file.name === b._file.name) {
+            return 0;
+        }
         return a._file.name > b._file.name ? 1 : -1;
     }
 
