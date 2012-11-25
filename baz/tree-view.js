@@ -7,7 +7,7 @@ define(["require", "exports", "./async", "./guid"], function(require, exports, _
         function FSTreeNode(file, $parent, db, environment, tree, indentLevel) {
             this._db = db;
             this._env = environment;
-            this._file = file;
+            this.file = file;
             this._$parent = $parent;
             this._tree = tree;
             this._indent = indentLevel || 0;
@@ -26,12 +26,75 @@ define(["require", "exports", "./async", "./guid"], function(require, exports, _
             return order;
         })();
         FSTreeNode.prototype._getMimeClass = function () {
-            return this._file.type.replace(/[\.\/]/g, '-');
+            return this.file.type.replace(/[\.\/]/g, '-');
+        };
+        FSTreeNode.prototype._dragStart = function (e) {
+            e.stopImmediatePropagation();
+            e.dataTransfer.setData('text/plain', this.file.absolutePath);
+            this._tree.dragSourceNode = this;
+        };
+        FSTreeNode.prototype._dragEnd = function (e) {
+            this._tree.dragSourceNode = null;
+        };
+        FSTreeNode.prototype._dragOver = function (e) {
+            e.stopImmediatePropagation();
+            var source = this._tree.dragSourceNode;
+            if(source === this || this === this._tree.root) {
+                return;
+            }
+            e.preventDefault();
+            this._$this.addClass('drag-hover');
+            return false;
+        };
+        FSTreeNode.prototype._dragLeave = function (e) {
+            this._$this.removeClass('drag-hover');
+        };
+        FSTreeNode.prototype._dragDrop = function (e) {
+            e.stopImmediatePropagation();
+            e.preventDefault();
+            this._$this.removeClass('drag-hover');
+            var sourcePath = e.dataTransfer.getData('text/plain'), sourceNode = this._tree.dragSourceNode;
+            if(sourceNode.file.absolutePath !== sourcePath) {
+                return false;
+            }
+            sourceNode.move(this);
+        };
+        Object.defineProperty(FSTreeNode.prototype, "domElement", {
+            get: function () {
+                return this._$this.get();
+            },
+            enumerable: true,
+            configurable: true
+        });
+        FSTreeNode.prototype.move = function (parent, cb) {
+            var moveView = function (response) {
+                if(response.success) {
+                }
+            };
+            this._db.mv(this.file.absolutePath, this._db.utils.normalizePath(parent.file.absolutePath + '/' + this.file.name), moveView);
+        };
+        FSTreeNode.prototype.copy = function (parent, cb) {
+            var copyView = function (response) {
+                if(response.success) {
+                }
+                cb && cb(response);
+            };
+            this._db.cp(this.file.absolutePath, this._db.utils.normalizePath(parent.file.absolutePath + '/' + this.file.name), copyView);
         };
         FSTreeNode.prototype.render = function () {
             var _this = this;
             if(!this._$this) {
-                this._$this = $('<div/>').appendTo(this._$parent).addClass('node').attr('id', this.id);
+                this._$this = $('<div/>').appendTo(this._$parent).addClass('node').attr('id', this.id).attr('draggable', 'true').bind('dragstart', function (e) {
+                    return _this._dragStart(e.originalEvent);
+                }).bind('dragover', function (e) {
+                    return _this._dragOver(e.originalEvent);
+                }).bind('dragleave', function (e) {
+                    return _this._dragLeave(e.originalEvent);
+                }).bind('drop', function (e) {
+                    return _this._dragDrop(e.originalEvent);
+                }).bind('dragend', function (e) {
+                    return _this._dragEnd(e.originalEvent);
+                });
             }
             var $itemContainer = $('<div/>').addClass('item-container').appendTo(this._$this).css('padding-left', (this._tree.indentAmount * this._indent) + 'px').hover(function () {
                 return _this._tree.fireNodeMouseIn(_this);
@@ -40,13 +103,13 @@ define(["require", "exports", "./async", "./guid"], function(require, exports, _
             });
             var $item = $('<div/>').appendTo($itemContainer).addClass('item ' + this._getMimeClass());
             var $toggleWrapper = $('<div/>').appendTo($item).addClass('toggle-content-view');
-            if(this._file.childCount > 0) {
+            if(this.file.childCount > 0) {
                 $('<div/>').appendTo($toggleWrapper).addClass('btn').click(function (_) {
                     return _this.toggle();
                 });
             }
             var $icon = $('<div/>').appendTo($item).addClass('icon');
-            var $name = $('<div/>').appendTo($item).addClass('name').text(this._file.name);
+            var $name = $('<div/>').appendTo($item).addClass('name').text(this.file.name);
             var $actions = $('<div/>').appendTo($item).addClass('actions');
             var $refresh = $('<div/>').appendTo($actions).addClass('refresh').click(function (_) {
                 return _this.refresh();
@@ -94,7 +157,7 @@ define(["require", "exports", "./async", "./guid"], function(require, exports, _
         FSTreeNode.prototype.refresh = function (cb) {
             var _this = this;
             this._$this.children('.content').empty();
-            var absolutePath = this._file.absolutePath;
+            var absolutePath = this.file.absolutePath;
             async.newTask(function (cb) {
                 return _this._db.getFileNode(absolutePath, cb);
             }).next(function (response) {
@@ -102,13 +165,13 @@ define(["require", "exports", "./async", "./guid"], function(require, exports, _
                     _this._env.log('Error refreshing "%s"', absolutePath);
                     return;
                 }
-                _this._file = response.result;
-                var i = 0, asyncOps = new Array(_this._file.childCount);
-                _this._file.forEachChild(function (child) {
+                _this.file = response.result;
+                var i = 0, asyncOps = new Array(_this.file.childCount);
+                _this.file.forEachChild(function (child) {
                     asyncOps[i++] = (function (cb) {
                         return _this._db.getFileNode(_this._db.utils.getAbsolutePath({
                             name: child.name,
-                            location: _this._file.absolutePath
+                            location: _this.file.absolutePath
                         }), cb);
                     });
                 });
@@ -121,11 +184,11 @@ define(["require", "exports", "./async", "./guid"], function(require, exports, _
                     argArray[_i] = arguments[_i + 0];
                 }
                 var response;
-                var nodes = new Array(_this._file.childCount);
+                var nodes = new Array(_this.file.childCount);
                 for(var i = 0, args; args = argArray[i]; i++) {
                     response = args[0];
                     if(!response.success) {
-                        _this._env.log('FAILURE: Could not open child of "%s".', _this._file.absolutePath);
+                        _this._env.log('FAILURE: Could not open child of "%s".', _this.file.absolutePath);
                     }
                     nodes[i] = new FSTreeNode(response.result, _this._$this.children('.content'), _this._db, _this._env, _this._tree, _this._indent + 1);
                 }
@@ -139,7 +202,7 @@ define(["require", "exports", "./async", "./guid"], function(require, exports, _
             });
         };
         FSTreeNode.prototype._compareType = function (a, b) {
-            var aType = a._file.type, bType = b._file.type, aPriority = FSTreeNode._TYPE_ORDER[aType], bPriority = FSTreeNode._TYPE_ORDER[bType], aPriorityUndefined = typeof aPriority === 'undefined', bPriorityUndefined = typeof bPriority === 'undefined';
+            var aType = a.file.type, bType = b.file.type, aPriority = FSTreeNode._TYPE_ORDER[aType], bPriority = FSTreeNode._TYPE_ORDER[bType], aPriorityUndefined = typeof aPriority === 'undefined', bPriorityUndefined = typeof bPriority === 'undefined';
             if(aPriorityUndefined && bPriorityUndefined) {
                 return 0;
             }
@@ -156,10 +219,10 @@ define(["require", "exports", "./async", "./guid"], function(require, exports, _
             return aPriority > bPriority ? 1 : -1;
         };
         FSTreeNode.prototype._compareName = function (a, b) {
-            if(a._file.name === b._file.name) {
+            if(a.file.name === b.file.name) {
                 return 0;
             }
-            return a._file.name > b._file.name ? 1 : -1;
+            return a.file.name > b.file.name ? 1 : -1;
         };
         FSTreeNode.prototype._compareFn = function (a, b) {
             var type = this._compareType(a, b);
@@ -208,13 +271,13 @@ define(["require", "exports", "./async", "./guid"], function(require, exports, _
                 if(!response.success) {
                     _this._env.log("Failed to open FS root (tree-view.ts:FSTreeView:constructor)");
                 }
-                _this._root = new FSTreeNode(response.result, _this._$this, _this._db, _this._env, _this);
-                _this._root.render();
-                _this._root.open();
+                _this.root = new FSTreeNode(response.result, _this._$this, _this._db, _this._env, _this);
+                _this.root.render();
+                _this.root.open();
             });
         };
         FSTreeView.prototype.traverse = function (fn) {
-            this._traverse(this._root, fn);
+            this._traverse(this.root, fn);
         };
         FSTreeView.prototype._traverse = function (startNode, fn) {
             if(!fn(startNode) || !startNode.isOpen || !startNode.nodes) {

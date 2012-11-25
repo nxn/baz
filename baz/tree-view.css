@@ -14,6 +14,15 @@
 .tree-view .node .item-container:hover
 { background-color: #fafafa
 }
+
+.tree-view .drag-hover > .item-container
+{ border: 1px dashed #aaa
+; border-left: none
+; border-right: none
+; height: 19px
+; margin-top: -1px
+}
+
 .tree-view .node .item-container .item
 { position: relative
 }

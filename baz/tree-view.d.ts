@@ -13,11 +13,15 @@ interface IFSTreeNode {
     id          : string;
     nodes       : IFSTreeNode[];
     isOpen      : bool;
+    file        : IFileNode;
+    domElement  : HTMLElement;
 
     render()    : void;
     toggle(cb?  : ICallback)    : void;
     open(cb?    : ICallback)    : void;
     close(cb?   : ICallback)    : void;
+    move(parent : IFSTreeNode, cb? : ICallback) : void;
+    copy(parent : IFSTreeNode, cb? : ICallback) : void;
 }
 
 interface IFSTreeViewEventHandler {
