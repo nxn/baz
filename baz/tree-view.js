@@ -142,7 +142,7 @@ define(["require", "exports", "./async", "./guid"], function(require, exports, _
             var $content = this._$this.children('.content');
             $content.slideUp(FSTreeNode._EFFECT_DURATION, function () {
                 $content.empty();
-                _this.nodes = null;
+                _this.nodes = [];
                 _this._tree.fireTreeChange(_this);
                 cb && cb();
             });

@@ -200,7 +200,7 @@ class FSTreeNode implements IFSTreeNode {
         var $content = this._$this.children('.content');
         $content.slideUp(FSTreeNode._EFFECT_DURATION, () => { 
             $content.empty();
-            this.nodes = null;
+            this.nodes = [];
             this._tree.fireTreeChange(this);
             cb && cb();
         });
