@@ -648,6 +648,7 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
             if(!cb) {
                 cb = FileDb._NOOP;
             }
+            var result = null;
             source = FileUtils.normalizePath(source);
             destination = FileUtils.normalizePath(destination);
             var transactionConfig = {
@@ -692,7 +693,12 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
                     this.name, 
                     '".'
                 ].join(''),
-                cb: cb
+                cb: function (response) {
+                    if(response.success) {
+                        response.result = result;
+                    }
+                    cb(response);
+                }
             };
             async.newTask(this._openDb()).next(function (db) {
                 return _this._getTransaction(db, transactionConfig);
@@ -711,7 +717,10 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
                     };
                 }
             }).done(function (sourceNode, destinationNode) {
-                return _this._env.log('\tSUCCESS: Copied "%s" to "%s".', sourceNode.absolutePath, destinationNode.absolutePath);
+                if(destinationNode.absolutePath === destination) {
+                    result = destinationNode;
+                }
+                _this._env.log('\tSUCCESS: Copied "%s" to "%s".', sourceNode.absolutePath, destinationNode.absolutePath);
             });
         };
         FileDb.prototype.mv = function (source, destination, cb) {
@@ -719,6 +728,7 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
             if(!cb) {
                 cb = FileDb._NOOP;
             }
+            var result = null;
             source = FileUtils.normalizePath(source);
             destination = FileUtils.normalizePath(destination);
             var transactionConfig = {
@@ -759,7 +769,12 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
                     this.name, 
                     '".'
                 ].join(''),
-                cb: cb
+                cb: function (response) {
+                    if(response.success) {
+                        response.result = result;
+                    }
+                    cb(response);
+                }
             };
             async.newTask(this._openDb()).next(function (db) {
                 return _this._getTransaction(db, transactionConfig);
@@ -773,7 +788,10 @@ define(["require", "exports", './async', './guid'], function(require, exports, _
                     };
                 }
             }).done(function (sourceNode, destinationNode) {
-                return _this._env.log('\tSUCCESS: Moved "%s" to "%s".', sourceNode.absolutePath, destinationNode.absolutePath);
+                if(destinationNode.absolutePath === destination) {
+                    result = destinationNode;
+                }
+                _this._env.log('\tSUCCESS: Moved "%s" to "%s".', sourceNode.absolutePath, destinationNode.absolutePath);
             });
         };
         return FileDb;

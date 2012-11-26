@@ -6,9 +6,10 @@ import g = module("./guid");
 
 class FSTreeNode implements IFSTreeNode {
     id                  : string;
+    file                : IFileNode;
+    parent              : IFSTreeNode;
     nodes               : IFSTreeNode[];
     isOpen              : bool;
-    file                : IFileNode;
 
     private _db         : IFileDb;
     private _env        : IEnvironment;
@@ -24,7 +25,7 @@ class FSTreeNode implements IFSTreeNode {
             var order = {};
             order["application/vnd.baz.solution"]   = 1;
             order["application/vnd.baz.project"]    = 2;
-            order["applicatoin/vnd.baz.directory"]  = 3;
+            order["application/vnd.baz.directory"]  = 3;
             return order;
         })();
 
@@ -35,15 +36,42 @@ class FSTreeNode implements IFSTreeNode {
         environment     : IEnvironment,
         tree            : FSTreeView,
         indentLevel?    : number
-    ) {
+    );
+    constructor(
+        file            : IFileNode,
+        parentNode      : IFSTreeNode,
+        db              : IFileDb, 
+        environment     : IEnvironment,
+        tree            : FSTreeView,
+        indentLevel?    : number
+    );
+    constructor(
+        file            : IFileNode,
+        parent          : any,
+        db              : IFileDb, 
+        environment     : IEnvironment,
+        tree            : FSTreeView,
+        indentLevel?    : number
+    )
+    {
+        this.id         = g.Guid.generate().value;
+        this.file       = file;
+        this.isOpen     = false;
+        this.nodes      = [];
+
+        if (parent instanceof jQuery) {
+            this.parent     = null;
+            this._$parent   = parent;
+        }
+        else {
+            this.parent     = parent;
+            this._$parent   = $(parent.domElement).children('.content');
+        }
+
         this._db        = db;
         this._env       = environment;
-        this.file      = file;
-        this._$parent   = $parent;
         this._tree      = tree;
         this._indent    = indentLevel || 0;
-        this.id         = g.Guid.generate().value;
-        this.isOpen     = false;
     }
 
     private _getMimeClass() {
@@ -99,48 +127,19 @@ class FSTreeNode implements IFSTreeNode {
         return this._$this.get();
     }
 
-    move(parent : IFSTreeNode, cb? : ICallback) {
-        var moveView = (response : IResponse) => {
-            if (response.success) {
-                
-            }
-        };
-
-        this._db.mv(
-            this.file.absolutePath, 
-            this._db.utils.normalizePath(parent.file.absolutePath + '/' + this.file.name),
-            moveView
-        );
-    }
-
-    copy(parent : IFSTreeNode, cb? : ICallback) {
-        var copyView = (response : IResponse) => {
-            if (response.success) {
-
-            }
-            cb && cb(response);
-        }
-
-        this._db.cp(
-            this.file.absolutePath,
-            this._db.utils.normalizePath(parent.file.absolutePath + '/' + this.file.name),
-            copyView
-        );
-    }
-
     render() {
         if (!this._$this) {
-            this._$this = $('<div/>')
-                .appendTo(this._$parent)
-                .addClass('node')
-                .attr('id', this.id)
-                .attr('draggable', 'true')
-                .bind('dragstart',  (e) => this._dragStart(e.originalEvent))
-                .bind('dragover',   (e) => this._dragOver(e.originalEvent))
-                .bind('dragleave',  (e) => this._dragLeave(e.originalEvent))
-                .bind('drop',       (e) => this._dragDrop(e.originalEvent))
-                .bind('dragend',    (e) => this._dragEnd(e.originalEvent));
+            this._$this = $('<div/>').appendTo(this._$parent);
         }
+
+        this._$this.addClass('node')
+            .attr('id', this.id)
+            .attr('draggable', 'true')
+            .bind('dragstart',  (e) => this._dragStart(e.originalEvent))
+            .bind('dragover',   (e) => this._dragOver(e.originalEvent))
+            .bind('dragleave',  (e) => this._dragLeave(e.originalEvent))
+            .bind('drop',       (e) => this._dragDrop(e.originalEvent))
+            .bind('dragend',    (e) => this._dragEnd(e.originalEvent));
 
         var $itemContainer = $('<div/>')
             .addClass('item-container')
@@ -252,7 +251,7 @@ class FSTreeNode implements IFSTreeNode {
 
                         nodes[i] = new FSTreeNode(
                             response.result, 
-                            this._$this.children('.content'), 
+                            this, 
                             this._db, 
                             this._env,
                             this._tree,
@@ -274,7 +273,107 @@ class FSTreeNode implements IFSTreeNode {
             );
     }
 
-    private _compareType(a : FSTreeNode, b : FSTreeNode) : number {
+    add(file : IFileNode) : IFSTreeNode {
+        var node = new FSTreeNode(
+            file,
+            this,
+            this._db,
+            this._env,
+            this._tree,
+            this._indent + 1
+        );
+
+        var idx = this._find(node, 0, this.nodes.length - 1, true)
+          , nextNode = this.nodes[idx];
+
+        if (nextNode) {
+            node._$this = $('<div/>').insertBefore(this.nodes[idx].domElement);
+            this.nodes.splice(idx, 0, node);
+        }
+        else {
+            this.nodes.push(node);
+        }
+
+        node.render();
+        this._tree.fireTreeChange(this);
+
+        return node;
+    }
+
+    remove(node : IFSTreeNode) {
+        var idx = this._find(node, 0, this.nodes.length - 1);
+
+        if (idx < 0) {
+            idx = this.nodes.indexOf(node);
+        }
+
+        var n = this.nodes[idx];
+
+        // sanity check that the absolute paths match
+        if (node.file.absolutePath !== n.file.absolutePath) {
+            return;
+        }
+
+        this.nodes.splice(idx, 1);
+        this._$this.find('#' + n.id).remove();
+        this._tree.fireTreeChange(this);
+    }
+
+    copy(destination : IFSTreeNode, cb? : ICallback) {
+        var copyView = (response : IResponse) => {
+            if (!response.success) {
+                return;
+            }
+
+            var node = destination.add(response.result);
+            cb && cb(node);
+        }
+
+        this._db.cp(
+            this.file.absolutePath,
+            this._db.utils.normalizePath(destination.file.absolutePath + '/' + this.file.name),
+            copyView
+        );
+    }
+
+    move(destination : IFSTreeNode, cb? : ICallback) {
+        var moveView = (response : IResponse) => {
+            if (!response.success) {
+                return;
+            }
+
+            var node = destination.add(response.result);
+            this.parent.remove(this);
+            cb && cb(node);
+        };
+
+        this._db.mv(
+            this.file.absolutePath, 
+            this._db.utils.normalizePath(destination.file.absolutePath + '/' + this.file.name),
+            moveView
+        );
+    }
+
+    private _find(node : IFSTreeNode, start : number, end : number, returnInsertionIndex = false) {
+        if (start > end) {
+            return returnInsertionIndex ? start : -1;
+        }
+
+        var middle = (start + (end - start) / 2) | 0
+          , result = this._compareFn(node, this.nodes[middle]);
+
+        if (result < 0) {
+            return this._find(node, start, middle - 1, returnInsertionIndex);
+        }
+        else if (result > 0) {
+            return this._find(node, middle + 1, end, returnInsertionIndex);
+        }
+        else {
+            return middle;
+        }
+    }
+
+    private _compareType(a : IFSTreeNode, b : IFSTreeNode) : number {
         var aType               = a.file.type
           , bType               = b.file.type
           , aPriority           = FSTreeNode._TYPE_ORDER[aType]
@@ -301,14 +400,14 @@ class FSTreeNode implements IFSTreeNode {
         return aPriority > bPriority ? 1 : -1
     }
 
-    private _compareName(a : FSTreeNode, b : FSTreeNode) : number {
+    private _compareName(a : IFSTreeNode, b : IFSTreeNode) : number {
         if (a.file.name === b.file.name) {
             return 0;
         }
         return a.file.name > b.file.name ? 1 : -1;
     }
 
-    private _compareFn(a : FSTreeNode, b : FSTreeNode) : number {
+    private _compareFn(a : IFSTreeNode, b : IFSTreeNode) : number {
         var type = this._compareType(a, b);
         if (type != 0) {
             return type;

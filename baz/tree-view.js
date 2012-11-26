@@ -4,15 +4,22 @@ define(["require", "exports", "./async", "./guid"], function(require, exports, _
     var g = __g__;
 
     var FSTreeNode = (function () {
-        function FSTreeNode(file, $parent, db, environment, tree, indentLevel) {
+        function FSTreeNode(file, parent, db, environment, tree, indentLevel) {
+            this.id = g.Guid.generate().value;
+            this.file = file;
+            this.isOpen = false;
+            this.nodes = [];
+            if(parent instanceof jQuery) {
+                this.parent = null;
+                this._$parent = parent;
+            } else {
+                this.parent = parent;
+                this._$parent = $(parent.domElement).children('.content');
+            }
             this._db = db;
             this._env = environment;
-            this.file = file;
-            this._$parent = $parent;
             this._tree = tree;
             this._indent = indentLevel || 0;
-            this.id = g.Guid.generate().value;
-            this.isOpen = false;
         }
         FSTreeNode._EFFECT_DURATION = 100;
         FSTreeNode._NOOP = function () {
@@ -22,7 +29,7 @@ define(["require", "exports", "./async", "./guid"], function(require, exports, _
             };
             order["application/vnd.baz.solution"] = 1;
             order["application/vnd.baz.project"] = 2;
-            order["applicatoin/vnd.baz.directory"] = 3;
+            order["application/vnd.baz.directory"] = 3;
             return order;
         })();
         FSTreeNode.prototype._getMimeClass = function () {
@@ -66,36 +73,22 @@ define(["require", "exports", "./async", "./guid"], function(require, exports, _
             enumerable: true,
             configurable: true
         });
-        FSTreeNode.prototype.move = function (parent, cb) {
-            var moveView = function (response) {
-                if(response.success) {
-                }
-            };
-            this._db.mv(this.file.absolutePath, this._db.utils.normalizePath(parent.file.absolutePath + '/' + this.file.name), moveView);
-        };
-        FSTreeNode.prototype.copy = function (parent, cb) {
-            var copyView = function (response) {
-                if(response.success) {
-                }
-                cb && cb(response);
-            };
-            this._db.cp(this.file.absolutePath, this._db.utils.normalizePath(parent.file.absolutePath + '/' + this.file.name), copyView);
-        };
         FSTreeNode.prototype.render = function () {
             var _this = this;
             if(!this._$this) {
-                this._$this = $('<div/>').appendTo(this._$parent).addClass('node').attr('id', this.id).attr('draggable', 'true').bind('dragstart', function (e) {
-                    return _this._dragStart(e.originalEvent);
-                }).bind('dragover', function (e) {
-                    return _this._dragOver(e.originalEvent);
-                }).bind('dragleave', function (e) {
-                    return _this._dragLeave(e.originalEvent);
-                }).bind('drop', function (e) {
-                    return _this._dragDrop(e.originalEvent);
-                }).bind('dragend', function (e) {
-                    return _this._dragEnd(e.originalEvent);
-                });
+                this._$this = $('<div/>').appendTo(this._$parent);
             }
+            this._$this.addClass('node').attr('id', this.id).attr('draggable', 'true').bind('dragstart', function (e) {
+                return _this._dragStart(e.originalEvent);
+            }).bind('dragover', function (e) {
+                return _this._dragOver(e.originalEvent);
+            }).bind('dragleave', function (e) {
+                return _this._dragLeave(e.originalEvent);
+            }).bind('drop', function (e) {
+                return _this._dragDrop(e.originalEvent);
+            }).bind('dragend', function (e) {
+                return _this._dragEnd(e.originalEvent);
+            });
             var $itemContainer = $('<div/>').addClass('item-container').appendTo(this._$this).css('padding-left', (this._tree.indentAmount * this._indent) + 'px').hover(function () {
                 return _this._tree.fireNodeMouseIn(_this);
             }, function () {
@@ -190,7 +183,7 @@ define(["require", "exports", "./async", "./guid"], function(require, exports, _
                     if(!response.success) {
                         _this._env.log('FAILURE: Could not open child of "%s".', _this.file.absolutePath);
                     }
-                    nodes[i] = new FSTreeNode(response.result, _this._$this.children('.content'), _this._db, _this._env, _this._tree, _this._indent + 1);
+                    nodes[i] = new FSTreeNode(response.result, _this, _this._db, _this._env, _this._tree, _this._indent + 1);
                 }
                 _this.nodes = nodes.sort(function (a, b) {
                     return _this._compareFn(a, b);
@@ -200,6 +193,70 @@ define(["require", "exports", "./async", "./guid"], function(require, exports, _
                 }
                 cb && cb();
             });
+        };
+        FSTreeNode.prototype.add = function (file) {
+            var node = new FSTreeNode(file, this, this._db, this._env, this._tree, this._indent + 1);
+            var idx = this._find(node, 0, this.nodes.length - 1, true), nextNode = this.nodes[idx];
+            if(nextNode) {
+                node._$this = $('<div/>').insertBefore(this.nodes[idx].domElement);
+                this.nodes.splice(idx, 0, node);
+            } else {
+                this.nodes.push(node);
+            }
+            node.render();
+            this._tree.fireTreeChange(this);
+            return node;
+        };
+        FSTreeNode.prototype.remove = function (node) {
+            var idx = this._find(node, 0, this.nodes.length - 1);
+            if(idx < 0) {
+                idx = this.nodes.indexOf(node);
+            }
+            var n = this.nodes[idx];
+            if(node.file.absolutePath !== n.file.absolutePath) {
+                return;
+            }
+            this.nodes.splice(idx, 1);
+            this._$this.find('#' + n.id).remove();
+            this._tree.fireTreeChange(this);
+        };
+        FSTreeNode.prototype.copy = function (destination, cb) {
+            var copyView = function (response) {
+                if(!response.success) {
+                    return;
+                }
+                var node = destination.add(response.result);
+                cb && cb(node);
+            };
+            this._db.cp(this.file.absolutePath, this._db.utils.normalizePath(destination.file.absolutePath + '/' + this.file.name), copyView);
+        };
+        FSTreeNode.prototype.move = function (destination, cb) {
+            var _this = this;
+            var moveView = function (response) {
+                if(!response.success) {
+                    return;
+                }
+                var node = destination.add(response.result);
+                _this.parent.remove(_this);
+                cb && cb(node);
+            };
+            this._db.mv(this.file.absolutePath, this._db.utils.normalizePath(destination.file.absolutePath + '/' + this.file.name), moveView);
+        };
+        FSTreeNode.prototype._find = function (node, start, end, returnInsertionIndex) {
+            if (typeof returnInsertionIndex === "undefined") { returnInsertionIndex = false; }
+            if(start > end) {
+                return returnInsertionIndex ? start : -1;
+            }
+            var middle = (start + (end - start) / 2) | 0, result = this._compareFn(node, this.nodes[middle]);
+            if(result < 0) {
+                return this._find(node, start, middle - 1, returnInsertionIndex);
+            } else {
+                if(result > 0) {
+                    return this._find(node, middle + 1, end, returnInsertionIndex);
+                } else {
+                    return middle;
+                }
+            }
         };
         FSTreeNode.prototype._compareType = function (a, b) {
             var aType = a.file.type, bType = b.file.type, aPriority = FSTreeNode._TYPE_ORDER[aType], bPriority = FSTreeNode._TYPE_ORDER[bType], aPriorityUndefined = typeof aPriority === 'undefined', bPriorityUndefined = typeof bPriority === 'undefined';

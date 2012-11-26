@@ -657,6 +657,8 @@ class FileDb implements IFileDb {
     cp(source : string, destination : string, cb? : (response : IResponse) => any) {
         if (!cb) cb = FileDb._NOOP;
 
+        var result : IFileNode = null;
+
         source      = FileUtils.normalizePath(source);
         destination = FileUtils.normalizePath(destination);
 
@@ -667,7 +669,7 @@ class FileDb implements IFileDb {
             successMsg  : ['\tSUCCESS: Transaction for copying "', source, '" to "', destination, '" in database "', this.name, '" completed.'].join(''),
             errorMsg    : ['\tFAILURE: Could not copy "', source, '" to "', destination, '" in database "', this.name, '".'].join(''),
             abortMsg    : ['\tFAILURE: Transaction aborted while copying "', source, '" to "', destination, '" in database "', this.name, '".'].join(''),
-            cb          : cb
+            cb          : (response: IResponse) => { if (response.success) { response.result = result; } cb(response); }
         };
 
         async
@@ -686,13 +688,19 @@ class FileDb implements IFileDb {
                     .add(content, destinationNode.contentId.value)
                     .onsuccess = ev => cb(sourceNode, destinationNode)
             )
-            .done((sourceNode : FileNode, destinationNode : FileNode) =>
+            .done((sourceNode : FileNode, destinationNode : FileNode) => {
+                if (destinationNode.absolutePath === destination) {
+                    result = destinationNode;
+                }
+
                 this._env.log('\tSUCCESS: Copied "%s" to "%s".', sourceNode.absolutePath, destinationNode.absolutePath)
-            );
+            });
     }
 
     mv(source : string, destination : string, cb? : (response : IResponse) => any) {
         if (!cb) cb = FileDb._NOOP;
+
+        var result : IFileNode = null;
 
         source      = FileUtils.normalizePath(source);
         destination = FileUtils.normalizePath(destination);
@@ -703,7 +711,7 @@ class FileDb implements IFileDb {
             successMsg  : ['\tSUCCESS: Transaction for moving "', source, '" to "', destination, '" in database "', this.name, '" completed.'].join(''),
             errorMsg    : ['\tFAILURE: Could not move "', source, '" to "', destination, '" in database "', this.name, '".'].join(''),
             abortMsg    : ['\tFAILURE: Transaction aborted while moving "', source, '" to "', destination, '" in database "', this.name, '".'].join(''),
-            cb          : cb
+            cb          : (response: IResponse) => { if (response.success) { response.result = result; } cb(response); }
         };
 
         async
@@ -713,15 +721,19 @@ class FileDb implements IFileDb {
                 this._removeChildReferenceFor(source, transaction);
                 return this._cpFileNodeBranch(source, destination, transaction)
             })
-            .next((sourceNode : FileNode, destinationNode : FileNode, transaction : IDBTransaction) => cb =>
-                transaction
+            .next((sourceNode : FileNode, destinationNode : FileNode, transaction : IDBTransaction) => 
+                cb => transaction
                     .objectStore(FileDb._FILE_NODE_STORE)
                     .delete(sourceNode.absolutePath)
                     .onsuccess = ev => cb(sourceNode, destinationNode)
             )
-            .done((sourceNode : FileNode, destinationNode : FileNode) =>
+            .done((sourceNode : FileNode, destinationNode : FileNode) => {
+                if (destinationNode.absolutePath === destination) {
+                    result = destinationNode;
+                }
+
                 this._env.log('\tSUCCESS: Moved "%s" to "%s".', sourceNode.absolutePath, destinationNode.absolutePath)
-            );
+            });
     }
 }
 

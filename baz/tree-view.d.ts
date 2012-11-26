@@ -15,11 +15,14 @@ interface IFSTreeNode {
     isOpen      : bool;
     file        : IFileNode;
     domElement  : HTMLElement;
+    parent      : IFSTreeNode;
 
-    render()    : void;
-    toggle(cb?  : ICallback)    : void;
-    open(cb?    : ICallback)    : void;
-    close(cb?   : ICallback)    : void;
+    add(file : IFileNode) : IFSTreeNode;
+    remove(node : IFSTreeNode) : void;
+    render() : void;
+    toggle(cb? : ICallback) : void;
+    open(cb? : ICallback) : void;
+    close(cb? : ICallback) : void;
     move(parent : IFSTreeNode, cb? : ICallback) : void;
     copy(parent : IFSTreeNode, cb? : ICallback) : void;
 }
