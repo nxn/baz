@@ -9,14 +9,16 @@ class FSTreeNode implements IFSTreeNode {
     file                : IFileNode;
     parent              : IFSTreeNode;
     nodes               : IFSTreeNode[];
-    isOpen              : bool;
+    isOpen              : bool = false;
+    indent              : number;
 
-    private _db         : IFileDb;
-    private _env        : IEnvironment;
-    private _$this      : JQuery;
-    private _$parent    : JQuery;
-    private _tree       : FSTreeView;
-    private _indent     : number;
+    private _db                 : IFileDb;
+    private _env                : IEnvironment;
+    private _tree               : FSTreeView;
+    private _$this              : JQuery;
+    private _$parent            : JQuery;
+    private _$collapseSwitch    : JQuery;
+    
 
     private static _EFFECT_DURATION = 100;
     private static _NOOP            = function() { };
@@ -42,16 +44,14 @@ class FSTreeNode implements IFSTreeNode {
         parentNode      : IFSTreeNode,
         db              : IFileDb, 
         environment     : IEnvironment,
-        tree            : FSTreeView,
-        indentLevel?    : number
+        tree            : FSTreeView
     );
     constructor(
         file            : IFileNode,
         parent          : any,
         db              : IFileDb, 
         environment     : IEnvironment,
-        tree            : FSTreeView,
-        indentLevel?    : number
+        tree            : FSTreeView
     )
     {
         this.id         = g.Guid.generate().value;
@@ -61,17 +61,19 @@ class FSTreeNode implements IFSTreeNode {
 
         if (parent instanceof jQuery) {
             this.parent     = null;
+            this.indent     = 0;
             this._$parent   = parent;
+            
         }
         else {
             this.parent     = parent;
+            this.indent     = parent.indent + 1;
             this._$parent   = $(parent.domElement).children('.content');
         }
 
         this._db        = db;
         this._env       = environment;
         this._tree      = tree;
-        this._indent    = indentLevel || 0;
     }
 
     private _getMimeClass() {
@@ -126,6 +128,9 @@ class FSTreeNode implements IFSTreeNode {
     get domElement() : HTMLElement {
         return this._$this.get();
     }
+    set domElement(value : HTMLElement) {
+        this._$this = $(value); 
+    }
 
     render() {
         if (!this._$this) {
@@ -144,7 +149,7 @@ class FSTreeNode implements IFSTreeNode {
         var $itemContainer = $('<div/>')
             .addClass('item-container')
             .appendTo(this._$this)
-            .css('padding-left', (this._tree.indentAmount * this._indent) + 'px')
+            .css('padding-left', (this._tree.indentAmount * this.indent) + 'px')
             .hover(
                 () => this._tree.fireNodeMouseIn(this),
                 () => this._tree.fireNodeMouseOut(this)
@@ -152,10 +157,14 @@ class FSTreeNode implements IFSTreeNode {
 
         var $item = $('<div/>').appendTo($itemContainer).addClass('item ' + this._getMimeClass())
 
-        var $toggleWrapper  = $('<div/>').appendTo($item).addClass('toggle-content-view');
+        this._$collapseSwitch = $('<div/>')
+            .hide()
+            .appendTo($item)
+            .addClass('collapse-switch')
+            .click( _ => this.toggle() );
 
         if (this.file.childCount > 0) {
-            $('<div/>').appendTo($toggleWrapper).addClass('btn').click( _ => this.toggle() );
+            this._$collapseSwitch.show();
         }
 
         var $icon = $('<div/>').appendTo($item).addClass('icon');
@@ -254,8 +263,7 @@ class FSTreeNode implements IFSTreeNode {
                             this, 
                             this._db, 
                             this._env,
-                            this._tree,
-                            this._indent + 1
+                            this._tree
                         );
                     }
 
@@ -268,35 +276,39 @@ class FSTreeNode implements IFSTreeNode {
                         node.render();
                     }
 
+                    if (this.nodes.length > 0) {
+                        this._$collapseSwitch.show();
+                    }
+                    else {
+                        this._$collapseSwitch.hide();
+                    }
+
                     cb && cb();
                 }
             );
     }
 
-    add(file : IFileNode) : IFSTreeNode {
-        var node = new FSTreeNode(
-            file,
-            this,
-            this._db,
-            this._env,
-            this._tree,
-            this._indent + 1
-        );
+    add(node : IFSTreeNode) : IFSTreeNode {
+        this._$collapseSwitch.show();
 
-        var idx = this._find(node, 0, this.nodes.length - 1, true)
-          , nextNode = this.nodes[idx];
+        if (!this.isOpen) {
+            this.open();
+            return;
+        }
 
-        if (nextNode) {
-            node._$this = $('<div/>').insertBefore(this.nodes[idx].domElement);
-            this.nodes.splice(idx, 0, node);
+        var idx = this._find(node, 0, this.nodes.length -1, true);
+
+        if (this.nodes.length === idx) {
+            this.nodes.push(node);
         }
         else {
-            this.nodes.push(node);
+            node.domElement = $('<div/>').insertBefore(this.nodes[idx].domElement).get();
+            this.nodes.splice(idx, 0, node);
         }
 
         node.render();
-        this._tree.fireTreeChange(this);
 
+        this._tree.fireTreeChange(this);
         return node;
     }
 
@@ -315,17 +327,36 @@ class FSTreeNode implements IFSTreeNode {
         }
 
         this.nodes.splice(idx, 1);
+
+        if (this.nodes.length < 1) {
+            this._$collapseSwitch.hide();
+            this.isOpen = false;
+            this._$this.removeClass('open');
+        }
+
         this._$this.find('#' + n.id).remove();
         this._tree.fireTreeChange(this);
     }
 
     copy(destination : IFSTreeNode, cb? : ICallback) {
+        if (destination === this.parent) {
+            return;
+        }
+
         var copyView = (response : IResponse) => {
             if (!response.success) {
                 return;
             }
 
-            var node = destination.add(response.result);
+            var node = destination.add(
+                new FSTreeNode(
+                    response.result,
+                    destination,
+                    this._db,
+                    this._env,
+                    this._tree
+                )
+            );
             cb && cb(node);
         }
 
@@ -337,12 +368,25 @@ class FSTreeNode implements IFSTreeNode {
     }
 
     move(destination : IFSTreeNode, cb? : ICallback) {
+        if (destination === this.parent) {
+            return;
+        }
+
         var moveView = (response : IResponse) => {
             if (!response.success) {
                 return;
             }
 
-            var node = destination.add(response.result);
+            var node = destination.add(
+                new FSTreeNode(
+                    response.result,
+                    destination,
+                    this._db,
+                    this._env,
+                    this._tree
+                )
+            );
+
             this.parent.remove(this);
             cb && cb(node);
         };

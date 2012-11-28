@@ -16,8 +16,9 @@ interface IFSTreeNode {
     file        : IFileNode;
     domElement  : HTMLElement;
     parent      : IFSTreeNode;
+    indent      : number;
 
-    add(file : IFileNode) : IFSTreeNode;
+    add(node : IFSTreeNode) : IFSTreeNode;
     remove(node : IFSTreeNode) : void;
     render() : void;
     toggle(cb? : ICallback) : void;

@@ -30,24 +30,23 @@
 { position: absolute
 ; top: 0px
 }
-  .tree-view .node .item .toggle-content-view
-, .tree-view .node .item .toggle-content-view .btn
+  .tree-view .node .item .collapse-switch
 , .tree-view .node .item .icon
 { width: 20px
 }
-.tree-view .item .toggle-content-view .btn
+.tree-view .item .collapse-switch
 { background-image: url(img/closed.png)
 ; background-repeat: no-repeat
 ; background-position: 50% 50%
 ; height: 20px
 }
-.tree-view .item .toggle-content-view .btn:hover
+.tree-view .item .collapse-switch:hover
 { background-image: url(img/closed-hover.png)
 }
-.tree-view .open > .item-container .toggle-content-view .btn
+.tree-view .open > .item-container .collapse-switch
 { background-image: url(img/open.png)
 }
-.tree-view .open > .item-container .toggle-content-view .btn:hover
+.tree-view .open > .item-container .collapse-switch:hover
 { background-image: url(img/open-hover.png)
 }
 .tree-view .item .icon
