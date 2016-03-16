@@ -1,0 +1,25 @@
+
+Typescript folder:
+C:\Program Files (x86)\Microsoft SDKs\TypeScript
+
+
+Error: 
+The command 
+""C:\Program Files (x86)\Microsoft SDKs\TypeScript\0.8.1.0\tsc" 
+--module amd --target ES5 
+"C:\Users\Administrator\Downloads\baz-master\baz-master\Baz\async.ts" 
+"C:\Users\Administrator\Downloads\baz-master\baz-master\Baz\async.d.ts" 
+"C:\Users\Administrator\Downloads\baz-master\baz-master\Baz\baz.ts" 
+"C:\Users\Administrator\Downloads\baz-master\baz-master\Baz\common.d.ts" 
+"C:\Users\Administrator\Downloads\baz-master\baz-master\Baz\filedb.ts" 
+"C:\Users\Administrator\Downloads\baz-master\baz-master\Baz\filedb.d.ts" 
+"C:\Users\Administrator\Downloads\baz-master\baz-master\Baz\guid.d.ts" 
+"C:\Users\Administrator\Downloads\baz-master\baz-master\Baz\guid.ts" 
+"C:\Users\Administrator\Downloads\baz-master\baz-master\Baz\tree-view-obsolete.ts" 
+"C:\Users\Administrator\Downloads\baz-master\baz-master\Baz\tree-view.d.ts" 
+"C:\Users\Administrator\Downloads\baz-master\baz-master\Baz\tree-view.ts"
+
+" exited with code 2.
+
+
+mklink /j 0.8.1.0 1.7
