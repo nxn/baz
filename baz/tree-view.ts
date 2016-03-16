@@ -1,13 +1,28 @@
 /// <reference path="tree-view.d.ts" />
 /// <reference path="jquery.d.ts" />
 
-import async = module("./async");
-import g = module("./guid");
+// import async = module("./async");
+// import g = module("./guid");
+
+
+import * as async from "./async";
+import * as g from "./guid";
+
+// declare var _this: any
+
+
+interface IResponse {
+    success: boolean;
+    error?: any;
+    result?: any;
+}
+
+
 
 class FSTreeNode implements IFSTreeNode {
     id                  : string;
     nodes               : IFSTreeNode[];
-    isOpen              : bool;
+    isOpen              : boolean;
 
     private _db         : IFileDb;
     private _env        : IEnvironment;
@@ -19,9 +34,10 @@ class FSTreeNode implements IFSTreeNode {
 
     private static _EFFECT_DURATION = 100;
     private static _NOOP            = function() { };
-    private static _TYPE_ORDER : { [type : string] : number; } = 
+    public static _TYPE_ORDER : { [type : string] : number; } = 
         (function() {
-            var order = {};
+        //var order = {};
+        var order: { [type: string]: number; } = {};
             order["application/vnd.baz.solution"]   = 1;
             order["application/vnd.baz.project"]    = 2;
             order["applicatoin/vnd.baz.directory"]  = 3;
@@ -151,9 +167,11 @@ class FSTreeNode implements IFSTreeNode {
                 return cb => async.newTaskSeq(asyncOps).done(cb);
             })
             .done(
-                function(...argArray : IArguments[]) => {
+                //function(...argArray : IArguments[]) => {
+                (...argArray: IArguments[]) => {
+                
                     var response : IResponse;
-
+                    
                     var nodes : FSTreeNode[] = new Array(this._file.childCount);
                     
                     for (var i = 0, args : IArguments; args = argArray[i]; i++) {
@@ -297,11 +315,11 @@ export class FSTreeView implements IFSTreeView {
         );
     }
 
-    traverse(fn : (node : IFSTreeNode) => bool) {
+    traverse(fn : (node : IFSTreeNode) => boolean) {
         this._traverse(this._root, fn);
     }
 
-    private _traverse(startNode : IFSTreeNode, fn : (node :IFSTreeNode) => bool) {
+    private _traverse(startNode : IFSTreeNode, fn : (node :IFSTreeNode) => boolean) {
         if (!fn(startNode) || !startNode.isOpen || !startNode.nodes) {
             return;
         }

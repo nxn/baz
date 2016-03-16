@@ -1,6 +1,14 @@
-import fs = module('./filedb');
-import async = module('./async');
-import ui = module('./tree-view');
+
+//import fs = module('./filedb');
+//import async = module('./async');
+//import ui = module('./tree-view');
+
+
+import * as fs from "./filedb";
+import * as async from "./async";
+import * as ui from "./tree-view";
+
+
 
 var bazSolution : IFileNodeData = {
     name: 'baz.sln',
@@ -10,7 +18,7 @@ var bazSolution : IFileNodeData = {
     children: null
 }
 
-var bazProject : IFileNodeData = {
+var bazProject: IFileNodeData = {
     name: 'baz.tsp',
     type: 'application/vnd.baz.project',
     location : '/baz.sln',

@@ -1,11 +1,28 @@
 /// <reference path="filedb.d.ts" />
 
-import async = module('./async');
-import g = module('./guid');
+// import async = module('./async');
+// import g = module('./guid');
+
+import * as async from "./async";
+import * as g from "./guid";
+
+
 
 interface IDBObjectStore {
-    delete(key : any) : IDBRequest;
+    delete(key: any): IDBRequest;
 }
+
+
+interface IResponse {
+    success: boolean;
+    error?: any;
+    result?: any;
+}
+
+interface IEnvironment {
+    log: (text: string, ...args: any[]) => void;
+}
+
 
 interface ITransactionConfig {
     mode?       : string;
@@ -18,8 +35,8 @@ interface ITransactionConfig {
 }
 
 class FileNode implements IFileNode {
-    private static _rxRepeatingSlash = /\/{2,}/g;
-    private static _rxTrailingSlash = /(.+?)(?:\/*)$/;
+    public static _rxRepeatingSlash = /\/{2,}/g;
+    public static _rxTrailingSlash = /(.+?)(?:\/*)$/;
 
     private _name       : string;
     private _location   : string;
@@ -58,14 +75,14 @@ class FileNode implements IFileNode {
         }
     }
 
-    cloneFileNodeData() : IFileNodeData {
+    cloneFileNodeData(): IFileNodeData {
         return {
-            name            : this.name,
-            location        : this.location,
-            type            : this.type,
-            children        : this.children,
-            absolutePath    : this.absolutePath,
-            contentId       : this.contentId.value
+            name: this.name,
+            location: this.location,
+            type: this.type,
+            children: this.children,
+            absolutePath: this.absolutePath,
+            contentId: this.contentId.value
         };
     }
 

@@ -29,8 +29,10 @@ interface IFileNode {
 interface IFileNodeData {
     name            : string;
     type            : string;
-    location        : string;
+    location: string;
+    absolutePath?: string;
     contentId?      : string;
+    content?         : string;
     children?       : IChildNodeDictionary;
 }
 

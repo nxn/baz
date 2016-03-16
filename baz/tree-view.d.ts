@@ -12,7 +12,7 @@ interface IFSTreeConfig {
 interface IFSTreeNode {
     id          : string;
     nodes       : IFSTreeNode[];
-    isOpen      : bool;
+    isOpen      : boolean;
 
     render()    : void;
     toggle(cb?  : ICallback)    : void;
@@ -27,7 +27,7 @@ interface IFSTreeViewEventHandler {
 interface IFSTreeView {
     indentAmount : number;
     render()                                        : void;
-    traverse(fn : (node : IFSTreeNode) => bool)     : void;
+    traverse(fn : (node : IFSTreeNode) => boolean)     : void;
     onTreeChange(handler : IFSTreeViewEventHandler) : void;
     onNodeSelect(handler: IFSTreeViewEventHandler)  : void;
     onNodeHover(
