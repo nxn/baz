@@ -10,6 +10,18 @@ module Async {
         var resultArgs : IArguments[] = new Array(ops.length)
           , completed = 0;
 
+
+        var getCb = function (i) {
+            return function () {
+                resultArgs[i] = arguments;
+                completed++;
+                if (completed === ops.length) {
+                    cb.apply(null, resultArgs);
+                }
+            }
+        };
+
+        /*
         var getCb = (i) => {
             return () => {
                 resultArgs[i] = arguments;
@@ -18,16 +30,24 @@ module Async {
                 if (completed === ops.length) cb.apply(null, resultArgs);
             }
         };
-
+        */
         for (var i = 0, op; op = ops[i]; i++) op(getCb(i));
     }
 
     export class Task implements ITask {
         private op : IAsyncOp;
 
-        constructor(ops : IAsyncOp[], returnInArray = false) {
-            if (returnInArray || ops.length > 1) {
-                this.op = cb => sync(() => cb.apply(null, arguments), ops);
+        constructor(ops: IAsyncOp[], returnInArray = false)
+        {
+            if (returnInArray || ops.length > 1)
+            {
+                // this.op = cb => sync(() => cb.apply(null, arguments), ops);
+
+                this.op = function (cb) {
+                    return sync(function () {
+                        return cb.apply(null, arguments);
+                    }, ops);
+                };
             }
             else if (ops.length === 1) {
                 this.op = ops[0];
@@ -48,7 +68,22 @@ module Async {
             // or more, new operations that are returned by the passed in 'getNextAsyncTasks' function. The 
             // resulting operations will be invoked when the new Async object receives its callback.
             return new Task([
-                (cb : ICallback) =>
+                (cb: ICallback) =>
+
+                    this.op(function () {
+                        var nextOps = getNextAsyncOps.apply(null, arguments);
+                        if (nextOps instanceof Function) {
+                            nextOps(cb);
+                        } else {
+                            if (nextOps instanceof Array) {
+                                sync(cb, nextOps);
+                            } else {
+                                cb();
+                            }
+                        }
+                    })
+
+                    /*
                     this.op(
                         () => { 
                             var nextOps = getNextAsyncOps.apply(null, arguments);
@@ -58,6 +93,7 @@ module Async {
                             else                               cb();
                         }
                     )
+                    */
             ]);
         }
 

@@ -1,0 +1,74 @@
+
+
+https://github.com/Microsoft/TypeScript-Handbook/blob/master/pages/Namespaces%20and%20Modules.md
+https://github.com/Microsoft/TypeScript/wiki/Breaking-Changes
+
+http://www.typescriptlang.org/Handbook
+
+
+
+http://bartwullems.blogspot.ch/2015/12/typescript-15-errorthe-arguments-object.html
+https://stackoverflow.com/questions/33477438/typescript-cannot-find-name-error-of-imported-class
+https://github.com/TypeStrong/tsify/issues/29
+https://stackoverflow.com/questions/13142635/how-can-i-create-an-object-based-on-an-interface-file-definition-in-typescript
+
+
+
+
+
+https://stackoverflow.com/questions/14283737/typescript-web-based-ide
+https://github.com/hi104/typescript-playground-on-ace
+https://hi104.github.io/typescript-playground-on-ace/
+https://jbaron.github.io/cats/
+
+
+https://github.com/BayardRock/FSharpWebIntellisense
+
+
+https://github.com/dotnet/roslyn/wiki/Interactive-Window
+https://github.com/dotnet/roslyn
+
+
+
+
+
+
+Typescript folder:
+C:\Program Files (x86)\Microsoft SDKs\TypeScript
+
+
+Error: 
+The command 
+""C:\Program Files (x86)\Microsoft SDKs\TypeScript\0.8.1.0\tsc" 
+--module amd --target ES5 
+"C:\Users\Administrator\Downloads\baz-master\baz-master\Baz\async.ts" 
+"C:\Users\Administrator\Downloads\baz-master\baz-master\Baz\async.d.ts" 
+"C:\Users\Administrator\Downloads\baz-master\baz-master\Baz\baz.ts" 
+"C:\Users\Administrator\Downloads\baz-master\baz-master\Baz\common.d.ts" 
+"C:\Users\Administrator\Downloads\baz-master\baz-master\Baz\filedb.ts" 
+"C:\Users\Administrator\Downloads\baz-master\baz-master\Baz\filedb.d.ts" 
+"C:\Users\Administrator\Downloads\baz-master\baz-master\Baz\guid.d.ts" 
+"C:\Users\Administrator\Downloads\baz-master\baz-master\Baz\guid.ts" 
+"C:\Users\Administrator\Downloads\baz-master\baz-master\Baz\tree-view-obsolete.ts" 
+"C:\Users\Administrator\Downloads\baz-master\baz-master\Baz\tree-view.d.ts" 
+"C:\Users\Administrator\Downloads\baz-master\baz-master\Baz\tree-view.ts"
+
+" exited with code 2.
+
+
+mklink /j 0.8.1.0 1.7
+
+
+
+
+C:\Users\Administrator>npm -version
+2.7.4
+
+C:\Users\Administrator>npm i -g typescript
+C:\Users\Administrator\AppData\Roaming\npm\tsc -> C:\Users\Administrator\AppData
+\Roaming\npm\node_modules\typescript\bin\tsc
+C:\Users\Administrator\AppData\Roaming\npm\tsserver -> C:\Users\Administrator\Ap
+pData\Roaming\npm\node_modules\typescript\bin\tsserver
+typescript@1.8.7 C:\Users\Administrator\AppData\Roaming\npm\node_modules\typescr
+ipt
+

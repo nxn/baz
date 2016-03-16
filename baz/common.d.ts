@@ -11,7 +11,7 @@ interface IAsyncOp {
 }
 
 interface IResponse {
-    success : bool;
+    success : boolean;
     error?  : any;
     result? : any;
 }

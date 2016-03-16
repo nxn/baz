@@ -1,10 +1,7 @@
-define(["require", "exports", './filedb', './async', './tree-view'], function(require, exports, __fs__, __async__, __ui__) {
-    var fs = __fs__;
-
-    var async = __async__;
-
-    var ui = __ui__;
-
+//import fs = module('./filedb');
+//import async = module('./async');
+//import ui = module('./tree-view');
+define(["require", "exports", "./filedb", "./async", "./tree-view"], function (require, exports, fs, async, ui) {
     var bazSolution = {
         name: 'baz.sln',
         type: 'application/vnd.baz.solution',
@@ -86,93 +83,34 @@ define(["require", "exports", './filedb', './async', './tree-view'], function(re
         debug: true,
         log: function (text) {
             var args = [];
-            for (var _i = 0; _i < (arguments.length - 1); _i++) {
-                args[_i] = arguments[_i + 1];
+            for (var _i = 1; _i < arguments.length; _i++) {
+                args[_i - 1] = arguments[_i];
             }
-            if(this.debug) {
+            if (this.debug) {
                 args.unshift(text);
                 console.log.apply(console, args);
             }
         }
     };
-    async.newTask(function (cb) {
-        return cb(fs.open({
-            name: 'baz',
-            environment: env
-        }));
-    }).next(function (fs) {
-        return function (cb) {
-            return fs.putFileNode(bazSolution, function () {
-                return cb(fs);
-            });
-        }
-    }).next(function (fs) {
-        return function (cb) {
-            return fs.putFileNode(bazProject, function () {
-                return cb(fs);
-            });
-        }
-    }).next(function (fs) {
-        return function (cb) {
-            return fs.putFileNode(bazTS, function () {
-                return cb(fs);
-            });
-        }
-    }).next(function (fs) {
-        return function (cb) {
-            return fs.putFileNode(bazJS, function () {
-                return cb(fs);
-            });
-        }
-    }).next(function (fs) {
-        return function (cb) {
-            return fs.putFileNode(bazCSS, function () {
-                return cb(fs);
-            });
-        }
-    }).next(function (fs) {
-        return function (cb) {
-            return fs.putFileNode(aceDir, function () {
-                return cb(fs);
-            });
-        }
-    }).next(function (fs) {
-        return function (cb) {
-            return fs.putFileNode(aceJS, function () {
-                return cb(fs);
-            });
-        }
-    }).next(function (fs) {
-        return function (cb) {
-            return fs.putFileNode(aceLong, function () {
-                return cb(fs);
-            });
-        }
-    }).next(function (fs) {
-        return function (cb) {
-            return fs.putFileNode(compilerProject, function () {
-                return cb(fs);
-            });
-        }
-    }).next(function (fs) {
-        return function (cb) {
-            return fs.putFileNode(tscTS, function () {
-                return cb(fs);
-            });
-        }
-    }).next(function (fs) {
-        return function (cb) {
-            return fs.putFileNode(libTS, function () {
-                return cb(fs);
-            });
-        }
-    }).done(function (fs) {
-        (window).tree = new ui.FSTreeView({
+    async.newTask(function (cb) { return cb(fs.open({ name: 'baz', environment: env })); })
+        .next(function (fs) { return function (cb) { return fs.putFileNode(bazSolution, function () { return cb(fs); }); }; })
+        .next(function (fs) { return function (cb) { return fs.putFileNode(bazProject, function () { return cb(fs); }); }; })
+        .next(function (fs) { return function (cb) { return fs.putFileNode(bazTS, function () { return cb(fs); }); }; })
+        .next(function (fs) { return function (cb) { return fs.putFileNode(bazJS, function () { return cb(fs); }); }; })
+        .next(function (fs) { return function (cb) { return fs.putFileNode(bazCSS, function () { return cb(fs); }); }; })
+        .next(function (fs) { return function (cb) { return fs.putFileNode(aceDir, function () { return cb(fs); }); }; })
+        .next(function (fs) { return function (cb) { return fs.putFileNode(aceJS, function () { return cb(fs); }); }; })
+        .next(function (fs) { return function (cb) { return fs.putFileNode(aceLong, function () { return cb(fs); }); }; })
+        .next(function (fs) { return function (cb) { return fs.putFileNode(compilerProject, function () { return cb(fs); }); }; })
+        .next(function (fs) { return function (cb) { return fs.putFileNode(tscTS, function () { return cb(fs); }); }; })
+        .next(function (fs) { return function (cb) { return fs.putFileNode(libTS, function () { return cb(fs); }); }; })
+        .done(function (fs) {
+        window.tree = new ui.FSTreeView({
             db: fs,
             environment: env,
             path: '/baz.sln',
             parentSel: '#solution-explorer'
         });
-        (window).fs = fs;
+        window.fs = fs;
     });
-})
+});
